@@ -1,3 +1,5 @@
+<p align="center"><img src="documentation/logo.png" align="center" width="60%"/></p>
+
 # pyNeuralEMPC
 
 This library under development aims to provide a user-friendly interface for the use of the eMPC controller. This implementation will support all types of deep neural networks as models for a given problem. To do so, this library will not rely on an analytical solver like [do-mpc](https://github.com/do-mpc/do-mpc) with [casadi](https://web.casadi.org/). This library will automatically generate the nonlinear problem with its Jacobian and Hessian matrices to use a traditional nonlinear solver.
