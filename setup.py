@@ -17,7 +17,7 @@ setup(
  
     long_description=open('README.md').read(),
     
-    install_requires=["numpy", "matplotlib", "tensorflow", "cyipopt"],
+    install_requires=["numpy", "matplotlib", "tensorflow", "cyipopt", "jax"],
 
     include_package_data=True,
  
