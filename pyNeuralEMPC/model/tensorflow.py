@@ -5,7 +5,8 @@ from .base import Model
 
 
 class KerasTFModel(Model):
-    def __init__(self, model, standardScaler=None):
+    def __init__(self, model, x_dim: int, u_dim: int, p_dim=0, tvp_dim=0, standardScaler=None):
+
         if not standardScaler is None:
             raise NotImplementedError("This feature isn't supported yet !")
 
@@ -15,7 +16,13 @@ class KerasTFModel(Model):
         if len(model.input_shape) != 2:
             raise NotImplementedError("Recurrent neural network are not supported atm.")
 
-        super(KerasTFModel).__init__(model, model.output_shape[-1])
+        if model.output_shape[-1] != x_dim:
+            raise ValueError("Your Keras model do not provide a suitable output dim ! \n It must get the same dim as the state dim.")
+
+        if model.input_shape[-1] != sum((x_dim, u_dim, p_dim, tvp_dim)):
+            raise ValueError("Your Keras model do not provide a suitable input dim ! \n It must get the same dim as the sum of all input vars (x, u, p, tvp).")
+        
+        super(KerasTFModel, self).__init__(x_dim, u_dim, p_dim, tvp_dim)
 
         self.model = model
 
@@ -27,12 +34,12 @@ class KerasTFModel(Model):
 
         with tf.GradientTape(persistent=False) as tx:
             tx.watch(input_tf)
-            output_tf = self.model(tx)
+            output_tf = self.model(input_tf)
         
         jacobian_tf = tx.jacobian(output_tf, input_tf)
         jacobian_np = np.stack([ jacobian_tf[i,:,i,:].numpy() for i in range(x.shape[0]) ]) 
 
-        return jacobian_np
+        return jacobian_np.reshape(jacobian_np.shape[0]*jacobian_np.shape[1],jacobian_np.shape[2])
 
     def hessian(self, x):
         input_tf = tf.constant(x)

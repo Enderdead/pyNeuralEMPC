@@ -79,3 +79,7 @@ class Integrator():
 
 
 
+class NoIntegrator(Integrator):
+    # TODO implement a No integrator when user do not way to use conventional way
+    pass
+

@@ -18,5 +18,19 @@ class NMPC():
 
         # TODO VERIF EVERY THINGS !
 
-    def next(self, x0, p=None, tvp=None):
-        raise NotImplementedError("")
+    def next(self, x0: np.array, p=None, tvp=None):
+        
+        # first check x0, p and tvp dim
+        assert len(x0.shape) == 1, "x0 must be a vector"
+        assert x0.shape[0] == self.model.x_dim, "x0 dim must set according to your model !"
+        
+        if not p is None:
+            assert len(x0.shape) == 1, "p must be a vector"
+            assert p.shape[0] == self.model.p_dim, "p dim must set according to your model !"
+
+        if not tvp is None:
+            assert len(tvp.shape) == 1, "tvp must be a vector"
+            assert tvp.shape[0] == self.model.p_dim, "tvp dim must set according to your model !"
+
+
+    
