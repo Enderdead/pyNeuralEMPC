@@ -24,10 +24,10 @@ class DomainConstraint:
         return len(self.states_constraint), len(self.control_constraint)
         
     def get_lower_bounds(self, H):
-        return [ element[0] for element in self.states_constraint ]*H + [ element[0] for element in self.control_constraint]*H 
+        return [ element[0] for element in self.states_constraint ]*(H-1) + [ element[0] for element in self.control_constraint]*H 
 
     def get_upper_bounds(self, H):
-        return [ element[1] for element in self.states_constraint ]*H + [ element[1] for element in self.control_constraint]*H 
+        return [ element[1] for element in self.states_constraint ]*(H-1) + [ element[1] for element in self.control_constraint]*H 
         
 class RelationConstraint:
     """

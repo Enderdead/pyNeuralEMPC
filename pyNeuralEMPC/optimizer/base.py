@@ -12,13 +12,13 @@ class ProblemInterface():
 
     def constraints(self, x):
         raise NotImplementedError("")
-
+    """
     def hessianstructure(self):
         raise NotImplementedError("")
 
     def hessian(self, x):
         raise NotImplementedError("")
-
+    """
     def jacobian(self, x):
         raise NotImplementedError("")
 
@@ -38,21 +38,33 @@ class ProblemFactory():
         self.x0 = None
         self.objective = None 
         self.constraints = None
-        self.model = None
+        self.integrator = None
 
     def getProblemInterface(self) -> ProblemInterface:
         if (not self.x0 is None) and \
            (not self.objective is None) and \
            (not self.constraints is None) and \
-           (not self.model is None):
+           (not self.integrator is None):
 
             return self._process()
+        
+        if self.x0 is None:
+            raise RuntimeError("Not ready yet ! x0 is missing")
+        if self.objective is None:
+            raise RuntimeError("Not ready yet ! objective is missing")
+        if self.constraints is None:
+            raise RuntimeError("Not ready yet ! constraints is missing")
+        if self.integrator is None:
+            raise RuntimeError("Not ready yet ! integrator is missing")
+
+    def set_integrator(self, integrator):
+        self.integrator = integrator
 
     def set_x0(self, x0: np.array):
         self.x0 = x0
 
     def set_objective(self, obj: ObjectiveFunc):
-        self.objective
+        self.objective = obj
 
     def set_constraints(self, ctrs: list):
         self.constraints = ctrs
