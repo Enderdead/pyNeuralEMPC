@@ -36,6 +36,7 @@ class DiscretIntegrator(Integrator):
 
     def _format_input(self, x, u, x0, p=None, tvp=None):
         # Create the input tensorflow for model forcasting
+
         list_input_values_t_1 = [np.concatenate([x0.reshape(1,-1),x])[:-1], u] 
 
         # Include tvp if present
@@ -63,10 +64,10 @@ class DiscretIntegrator(Integrator):
         tvp_dim     = self.model.tvp_dim
         p_dim       = self.model.p_dim
 
-        J_extended = np.zeros((state_dim*self.H, (state_dim+control_dim+tvp_dim)*self.H + p_dim - state_dim)) # - state_dim cause it has one element less 
+        J_extended = np.zeros((state_dim*self.H, (state_dim+control_dim)*self.H)) 
 
         # Push -1 gradient estimate of identity
-        J_extended[0:self.H*state_dim, 0:(self.H-1)*state_dim] = -np.eye(state_dim*self.H,state_dim*(self.H-1))
+        J_extended[0:self.H*state_dim, 0:self.H*state_dim] = -np.eye(state_dim*self.H,state_dim*self.H)
 
         # Now we need to estimate jacobian of the model forecasting
 
@@ -74,15 +75,17 @@ class DiscretIntegrator(Integrator):
         model_input = self._format_input(x, u, x0, p=p, tvp=tvp)
         model_jac = self.model.jacobian(model_input)
 
-        assert len(model_jac.shape) == 2, "Jacobien matrix need to be a matrix (flatten 3D matrix if needed)"
-        assert model_jac.shape[0] == self.H
-        assert model_jac.shape[1] == (state_dim + control_dim + tvp_dim + p_dim)
+        # REFAIRE 
+        #assert len(model_jac.shape) == 2, "Jacobien matrix need to be a matrix (flatten 3D matrix if needed)"
+        #assert model_jac.shape[0] == self.H*state_dim # TODO wron if RNN
+        #assert model_jac.shape[1] == (state_dim + control_dim + tvp_dim + p_dim)
 
+        print(model_jac)
         # state t - 1 
-        J_extended[state_dim:,0:state_dim] = make_diag_from_2D(model_jac[state_dim:, 0:state_dim])
+        J_extended[state_dim:,0:state_dim*self.H] += model_jac[:-state_dim,0:state_dim*self.H]#make_diag_from_2D(model_jac[state_dim:, 0:state_dim])
 
         # U
-        J_extended[:,state_dim:state_dim+control_dim] = make_diag_from_2D(model_jac[:, state_dim:state_dim+control_dim])
+        J_extended[:,state_dim:(state_dim+control_dim)*self.H] =  model_jac[:,state_dim:(state_dim+control_dim)*self.H]#make_diag_from_2D(model_jac[:, state_dim:state_dim+control_dim])
 
         """
         # tvp

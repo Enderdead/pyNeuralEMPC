@@ -37,7 +37,7 @@ import pickle
 
 
 NB_STEPS = 700
-Hb = 3
+Hb = 2
 U_MAX = 60
 U_MIN = 0
 REFRESH_EVERY = 2
@@ -63,11 +63,11 @@ input_tensor = tf.constant(np.array([[50.0,5.0,0.0],[50.0,5.0,0.0]]))
 
 model_nmpc = nEMPC.model.tensorflow.KerasTFModel(keras_model, x_dim=2, u_dim=1)
 
-def forward_jnp(x, u, p, tvp):
-    result = u[0]*x/2.0 
+def forward_jnp(x, u, p=None, tvp=None):
+    result = jnp.repeat( u[:,0].reshape(-1,1), x.shape[-1],  axis=1)*x/2.0 
     return result
 
-model_nmpc = nEMPC.model.jax.DiffDiscretJaxModel(forward_jnp, x_dim=2, u_dim=1)
+model_nmpc = nEMPC.model.jax.DiffDiscretJaxModel(forward_jnp, x_dim=2, u_dim=1, vector_mode=True)
 
 
 constraints_nmpc = [nEMPC.constraints.DomainConstraint(
@@ -81,7 +81,7 @@ class LotkaCost:
         self.cost_vec = cost_vec
 
     def __call__(self, x, u, p=None, tvp=None):
-        return jnp.sum(u*self.cost_vec)
+        return jnp.sum(u.reshape(-1)*self.cost_vec.reshape(-1))
 
 
 cost_func = LotkaCost(jnp.array([1.1,]*2))

@@ -30,13 +30,14 @@ class JAXObjectifFunc(ObjectiveFunc):
 
     def gradient(self, states, u, p=None, tvp=None):
         
-        grad_states = jax.grad(self.func, argnums=0)(states, u, p, tvp)
-        grad_u = jax.grad(self.func, argnums=1)(states, u, p, tvp)
+        #TODO maybe problem
+        grad_states = jax.grad(self.func, argnums=0)(states, u, p, tvp).reshape(-1)
+        grad_u = jax.grad(self.func, argnums=1)(states, u, p, tvp).reshape(-1)
 
         result_list = [grad_states, grad_u]
 
         if not tvp is None:
-            result_list.append(jax.grad(self.func, argnums=3)(states, u, p, tvp))
+            result_list.append(jax.grad(self.func, argnums=3)(states, u, p, tvp)).reshape(-1)
 
         if not p is None:
             result_list.append(jax.grad(self.func, argnums=2)(states, u, p, tvp))

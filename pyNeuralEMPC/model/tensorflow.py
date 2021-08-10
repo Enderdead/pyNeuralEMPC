@@ -37,14 +37,17 @@ class KerasTFModel(Model):
             output_tf = self.model(input_tf)
         
         jacobian_tf = tx.jacobian(output_tf, input_tf)
-        jacobian_np = np.stack([ jacobian_tf[i,:,i,:].numpy() for i in range(x.shape[0]) ]) 
-
+        jacobian_np = np.stack([ jacobian_tf[i,:,i,:].numpy() for i in range(x.shape[0]) ]) #TODO wrong when RNN
+        # Good way => jacobian_np[0].reshape(x_dim*H, x_dim*H)
+        # Good way => jacobian_np[1].reshape(x_dim*H, u_dim*H)
+        raise ValueError("Need to be re implemented")
         return jacobian_np.reshape(jacobian_np.shape[0]*jacobian_np.shape[1],jacobian_np.shape[2])
 
     def hessian(self, x):
         input_tf = tf.constant(x)
 
         hessian_tf_list = list()
+        raise ValueError("Need to be re implemented")
 
         for i in range(self.output_dim):
 
