@@ -12,10 +12,10 @@ class ProblemInterface():
 
     def constraints(self, x):
         raise NotImplementedError("")
-    """
+    
     def hessianstructure(self):
         raise NotImplementedError("")
-    """
+    
     def hessian(self, x):
         raise NotImplementedError("")
 

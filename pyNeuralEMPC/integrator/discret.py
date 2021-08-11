@@ -106,9 +106,6 @@ class DiscretIntegrator(Integrator):
         final_H[:,x.shape[1]*x.shape[0]:,  :x.shape[1]*(x.shape[0]-1) ] += model_H[:,  x.shape[1]*x.shape[0]:, x.shape[1]:x.shape[1]*x.shape[0] ]
 
         
-        print("final_H" , model_H)
-
-        print("final_H" , final_H)
         return final_H
 
     def hessianstructure(self, nb_sample=3):
@@ -131,10 +128,24 @@ class DiscretIntegrator(Integrator):
             
             hessian  = self.model.hessian(x_random, u_random, x_random[0,:],p=p_random, tvp=tvp_random)
 
+
+            hessian = hessian.reshape(-1,*hessian.shape[2:])
+            final_hessian = np.zeros_like(hessian)
+            # x_t x x_t 
+            final_hessian[:,:x_random.shape[1]*(x_random.shape[0]-1), 0:x_random.shape[1]*(x_random.shape[0]-1)] += hessian[:,x_random.shape[1]:x_random.shape[1]*x_random.shape[0], x_random.shape[1]:x_random.shape[1]*x_random.shape[0]]
+            # u_t x u_t
+            final_hessian[:,x_random.shape[1]*x_random.shape[0]:, x_random.shape[1]*x_random.shape[0]:] += hessian[:,x_random.shape[1]*x_random.shape[0]:, x_random.shape[1]*x_random.shape[0]:]
+
+            # x_t x u_t
+            final_hessian[:, :x_random.shape[1]*(x_random.shape[0]-1), x_random.shape[1]*x_random.shape[0]:] += hessian[:,x_random.shape[1]:x_random.shape[1]*x_random.shape[0], x_random.shape[1]*x_random.shape[0]:]
+
+            # u_t x x_t
+            final_hessian[:,x_random.shape[1]*x_random.shape[0]:,  :x_random.shape[1]*(x_random.shape[0]-1) ] += hessian[:,  x_random.shape[1]*x_random.shape[0]:, x_random.shape[1]:x_random.shape[1]*x_random.shape[0] ]
+
             if hessian_map is None:
-                hessian_map = (hessian!= 0.0).astype(np.float64)
+                hessian_map = (final_hessian!= 0.0).astype(np.float64)
             else:
-                hessian_map += (hessian!= 0.0).astype(np.float64)
+                hessian_map += (final_hessian!= 0.0).astype(np.float64)
                 hessian_map = hessian_map.astype(np.bool).astype(np.float64)
-        hessian_map  = np.sum(hessian_map, axis=[0,1]).astype(np.bool).astype(np.float64)
+        hessian_map  = np.sum(hessian_map, axis=0).astype(np.bool).astype(np.float64)
         return hessian_map

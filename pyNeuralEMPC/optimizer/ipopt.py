@@ -41,10 +41,10 @@ class IpoptProblem(ProblemInterface):
 
         for ctr in self.constraints_list:
             contraints_forward_list.append(ctr.forward(states, u, p=p, tvp=tvp))
-        print("contraints_forward_list : ", contraints_forward_list)
+
         return np.concatenate(contraints_forward_list)
 
-    """
+    
     def hessianstructure(self):
 
         hessian_map_objective = self.objective_func.hessianstructure(  self.integrator.H, self.integrator.model)
@@ -52,9 +52,9 @@ class IpoptProblem(ProblemInterface):
         hessian_map_integrator = self.integrator.hessianstructure()
 
         final_hessian_map  = (hessian_map_objective + hessian_map_integrator).astype(np.bool).astype(np.float32)
-        
-        return None#np.nonzero(final_hessian_map)
-    """
+
+        return np.nonzero(np.tril(final_hessian_map))#np.nonzero(np.ones_like(final_hessian_map))
+    
 
     
     def hessian(self, x, lagrange, obj_factor):
@@ -68,13 +68,13 @@ class IpoptProblem(ProblemInterface):
         
         # TODO add constraints 
         for idx, lagrange_coef in enumerate(lagrange): # TODO remove this loop (vec comp)
-            print(f"idx : {idx} lagrange_coef= {lagrange_coef} final = {integrator_hessian_matrice[idx]}")
+
             hessian_matrice+=lagrange_coef*integrator_hessian_matrice[idx]
 
-        print("result  : ")
-        print(hessian_matrice)
-        #row, col = self.hessianstructure()
-        return hessian_matrice#[row, col]
+
+        row, col = self.hessianstructure()
+
+        return hessian_matrice[row, col]
 
     def jacobian(self, x):
         states, u, tvp, p = self._split(x)
@@ -155,7 +155,7 @@ class Ipopt(Optimizer):
             cu=cu
             )
 
-        nlp.addOption('max_iter',            1)# self.max_iteration)
+        nlp.addOption('max_iter',            self.max_iteration)# 
         nlp.addOption('derivative_test', 'second-order')
         nlp.addOption('derivative_test_print_all', 'yes')
         nlp.addOption('point_perturbation_radius',1e-1)
