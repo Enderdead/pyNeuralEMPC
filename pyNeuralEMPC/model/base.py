@@ -1,3 +1,4 @@
+import numpy as np
 
 class Model:
     def __init__(self, x_dim: int, u_dim: int, p_dim=None, tvp_dim=None):
@@ -7,14 +8,15 @@ class Model:
         self.p_dim = p_dim
         self.tvp_dim = tvp_dim
 
-    def forward(self, x):
+    def forward(self, x: np.ndarray, u: np.ndarray, x0: np.ndarray, p=None, tvp=None):
         raise NotImplementedError("")
 
-    def jacobian(self, x):
+    def jacobian(self, x: np.ndarray, u: np.ndarray, x0: np.ndarray, p=None, tvp=None):
         raise NotImplementedError("")
 
-    def hessian(self, x):
+    def hessian(self, x: np.ndarray, u: np.ndarray, x0: np.ndarray, p=None, tvp=None):
         raise NotImplementedError("")
+
 
 
 CONSTANT_VAR = 1

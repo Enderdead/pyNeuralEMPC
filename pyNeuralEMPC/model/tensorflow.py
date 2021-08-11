@@ -26,25 +26,40 @@ class KerasTFModel(Model):
 
         self.model = model
 
-    def forward(self, x):
-        return self.model.predict(x)
+    def _gather_input(self, x: np.ndarray, u: np.ndarray, p=None, tvp=None):
+        output_np = np.concatenate([x, u], axis=1)
+        if not tvp is None:
+            output_np = np.concatenate([output_np, tvp], axis=1)
+        if not p is None:
+            #TODO check this part
+            output_np = np.concatenate([output_np, np.array([[p,]*x.shape[0]])], axis=1)
 
-    def jacobian(self, x):
-        input_tf = tf.constant(x)
+        return output_np
+
+    def forward(self, x: np.ndarray, u: np.ndarray, p=None, tvp=None):
+        input_net = self._gather_input(x, u, p=p, tvp=tvp)
+        return self.model.predict(input_net)
+
+    def jacobian(self, x: np.ndarray, u: np.ndarray, p=None, tvp=None):
+        input_net = self._gather_input(x, u, p=p, tvp=tvp)
+
+        input_tf = tf.constant(input_net)
 
         with tf.GradientTape(persistent=False) as tx:
             tx.watch(input_tf)
             output_tf = self.model(input_tf)
         
         jacobian_tf = tx.jacobian(output_tf, input_tf)
-        jacobian_np = np.stack([ jacobian_tf[i,:,i,:].numpy() for i in range(x.shape[0]) ]) #TODO wrong when RNN
-        # Good way => jacobian_np[0].reshape(x_dim*H, x_dim*H)
-        # Good way => jacobian_np[1].reshape(x_dim*H, u_dim*H)
-        raise ValueError("Need to be re implemented")
-        return jacobian_np.reshape(jacobian_np.shape[0]*jacobian_np.shape[1],jacobian_np.shape[2])
+        # TODO check this projection
 
-    def hessian(self, x):
-        input_tf = tf.constant(x)
+        jacobian_np = jacobian_tf.numpy()[:,:,:,0:self.x_dim+self.u_dim]
+        jacobian_np = jacobian_tf.numpy().reshape(self.H*self.x_dim, (self.x_dim+self.u_dim)*self.H)
+        
+        return jacobian_np
+
+    def hessian(self, x: np.ndarray, u: np.ndarray, p=None, tvp=None):
+        input_np = self._gather_input(x, u, p=p, tvp=tvp)
+        input_tf = tf.constant(input_np)
 
         hessian_tf_list = list()
         raise ValueError("Need to be re implemented")

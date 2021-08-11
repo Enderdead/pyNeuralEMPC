@@ -93,8 +93,8 @@ MPC = nEMPC.controller.NMPC(integrator, objective_func, constraints_nmpc, H, DT)
 
 curr_x, curr_cost = system.get_init_state()
 
-cost_func.cost_vec = jnp.array(curr_cost)
-aa = MPC.next(curr_x)
+#cost_func.cost_vec = jnp.array(curr_cost)
+aa = MPC.get_pb(curr_x)
 
 1/0
 u, pred = MPC.next(curr_x)

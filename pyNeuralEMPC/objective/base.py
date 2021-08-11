@@ -14,6 +14,9 @@ class ObjectiveFunc:
     def hessian(self, x, u, x0, p=None, tvp=None):
         raise NotImplementedError("")
 
+    def hessianstructure(self):
+        raise NotImplementedError("")
+
 
 class ManualObjectifFunc(ObjectiveFunc):
     def __init__(self, func, grad_func, hessian_func):
@@ -31,3 +34,5 @@ class ManualObjectifFunc(ObjectiveFunc):
     def hessian(self, x, u, x0, p=None, tvp=None):
         return self.hessian_func(x, u, x0, p, tvp)
     
+    def hessianstructure(self, H, model):
+        raise NotImplementedError("")

@@ -5,13 +5,15 @@ import cyipopt
 
 
 class IpoptProblem(ProblemInterface):
-    def __init__(self, x0, objective_func, constraints, integrator):
+    def __init__(self, x0, objective_func, constraints, integrator, p=None, tvp=None):
         self.x0 = x0
         self.objective_func = objective_func 
         self.constraints_list = constraints
         self.integrator = integrator
         self.x_dim, self.u_dim, self.p_dim, self.tvp_dim = self.integrator.model.x_dim, self.integrator.model.u_dim, self.integrator.model.p_dim, self.integrator.model.tvp_dim  
         self.H = self.integrator.H
+        self.p = p
+        self.tvp = tvp
 
     def _split(self, x):
         prev_idx = 0
@@ -21,12 +23,7 @@ class IpoptProblem(ProblemInterface):
         u = x[prev_idx:prev_idx+self.u_dim*self.H]
         prev_idx += self.u_dim*self.H
 
-        tvp = None if self.tvp_dim == 0 else x[prev_idx:prev_idx+self.tvp_dim].reshape(self.H, self.tvp_dim)
-        prev_idx += self.tvp_dim*self.H
-
-        p   = None if self.p_dim   == 0 else x[prev_idx:prev_idx+self.p_dim]
-
-        return states.reshape(self.H, self.x_dim), u.reshape(self.H, self.u_dim), tvp, p
+        return states.reshape(self.H, self.x_dim), u.reshape(self.H, self.u_dim), self.tvp, self.p
 
     def objective(self, x):
         # TODO split les dt !!!!
@@ -34,28 +31,50 @@ class IpoptProblem(ProblemInterface):
         return self.objective_func.forward(states, u, p=p, tvp=tvp)
 
     def gradient(self, x):
-        # TODO split les dt !!!!
         states, u, tvp, p = self._split(x)
         return self.objective_func.gradient(states, u, p=p, tvp=tvp)
 
     def constraints(self, x):
-        # TODO split les dt !!!!
         states, u, tvp, p = self._split(x)
 
         contraints_forward_list = [self.integrator.forward(states, u, self.x0, p=p, tvp=tvp),]
 
         for ctr in self.constraints_list:
             contraints_forward_list.append(ctr.forward(states, u, p=p, tvp=tvp))
-        
+        print("contraints_forward_list : ", contraints_forward_list)
         return np.concatenate(contraints_forward_list)
 
     """
     def hessianstructure(self):
-        raise NotImplementedError("")
 
-    def hessian(self, x):
-        raise NotImplementedError("")
+        hessian_map_objective = self.objective_func.hessianstructure(  self.integrator.H, self.integrator.model)
+
+        hessian_map_integrator = self.integrator.hessianstructure()
+
+        final_hessian_map  = (hessian_map_objective + hessian_map_integrator).astype(np.bool).astype(np.float32)
+        
+        return None#np.nonzero(final_hessian_map)
     """
+
+    
+    def hessian(self, x, lagrange, obj_factor):
+        states, u, tvp, p = self._split(x)
+        
+        hessian_matrice = np.zeros((x.shape[0], x.shape[0]))
+
+        hessian_matrice += obj_factor*self.objective_func.hessian(states, u, p=p, tvp=tvp)
+
+        integrator_hessian_matrice = self.integrator.hessian(states, u, self.x0, p=p, tvp=tvp)
+        
+        # TODO add constraints 
+        for idx, lagrange_coef in enumerate(lagrange): # TODO remove this loop (vec comp)
+            print(f"idx : {idx} lagrange_coef= {lagrange_coef} final = {integrator_hessian_matrice[idx]}")
+            hessian_matrice+=lagrange_coef*integrator_hessian_matrice[idx]
+
+        print("result  : ")
+        print(hessian_matrice)
+        #row, col = self.hessianstructure()
+        return hessian_matrice#[row, col]
 
     def jacobian(self, x):
         states, u, tvp, p = self._split(x)
@@ -71,10 +90,16 @@ class IpoptProblem(ProblemInterface):
         return self.x0
 
     def get_constraint_lower_bounds(self):
-        return sum([ [  ctr.get_lower_bounds() for ctr in self.constraints_list  ]], list())
+        #TODO refaire 
+        return self.integrator.get_lower_bounds()
+        #ajouter integrator
+        return sum([ [  ctr.get_lower_bounds() for ctr in [self.integrator,]+self.constraints_list  ]], list())
 
     def get_constraint_upper_bounds(self):
-        return sum([ [  ctr.get_upper_bounds() for ctr in self.constraints_list  ]], list())
+        #TODO refaire 
+        return self.integrator.get_upper_bounds()
+
+        return sum([ [  ctr.get_upper_bounds() for ctr in [self.integrator,]+self.constraints_list  ]], list())
 
 
 class IpoptProblemFactory(ProblemFactory):
@@ -130,8 +155,12 @@ class Ipopt(Optimizer):
             cu=cu
             )
 
-        nlp.addOption('max_iter',             self.max_iteration)
-        nlp.addOption('derivative_test', 'first-order')
+        nlp.addOption('max_iter',            1)# self.max_iteration)
+        nlp.addOption('derivative_test', 'second-order')
+        nlp.addOption('derivative_test_print_all', 'yes')
+        nlp.addOption('point_perturbation_radius',1e-1)
+        nlp.addOption('derivative_test_perturbation',1e-1)
+
         #nlp.addOption('mu_strategy',               self.mu_strategy) 
         #nlp.addOption('mu_target',                 self.mu_target)
         #nlp.addOption('mu_linear_decrease_factor', self.mu_linear_decrease_factor)

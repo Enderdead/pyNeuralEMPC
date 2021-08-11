@@ -12,7 +12,8 @@ def make_diag_from_2D(A: np.ndarray):
 
 class DiscretIntegrator(Integrator):
     def __init__(self, model, H):
-        super(DiscretIntegrator, self).__init__(model, H)
+        nb_contraints = model.x_dim*H
+        super(DiscretIntegrator, self).__init__(model, H, nb_contraints)
 
     def forward(self, x: np.ndarray, u: np.ndarray, x0: np.ndarray, p=None, tvp=None)-> np.ndarray:
 
@@ -23,16 +24,15 @@ class DiscretIntegrator(Integrator):
         # TODO maybe look at the shape values
 
         # Create a view for t-1 and t in order to perform the substraction
-        states_t_1 = np.concatenate([x0.reshape(1,-1),x])[:-1]
-        states_t     = x.copy()
+        x_t_1 = np.concatenate([x0.reshape(1,-1),x],axis=0)[:-1]
+        x_t     = x.copy()
 
-        states_t_1_extended = self._format_input(x, u, x0, p=p, tvp=tvp)
 
         # Get discret differential prediction from the model
-        estim_state_t = states_t_1 + self.model.forward(states_t_1_extended)
+        estim_x_t = x_t_1 + self.model.forward(x_t_1, u, tvp=tvp, p=p)
 
         # return flatten constraint error
-        return (estim_state_t - states_t).reshape(-1)
+        return (estim_x_t - x_t).reshape(-1)
 
     def _format_input(self, x, u, x0, p=None, tvp=None):
         # Create the input tensorflow for model forcasting
@@ -72,33 +72,69 @@ class DiscretIntegrator(Integrator):
         # Now we need to estimate jacobian of the model forecasting
 
         # generate model input and evaluate the jacobian matrix
-        model_input = self._format_input(x, u, x0, p=p, tvp=tvp)
-        model_jac = self.model.jacobian(model_input)
 
-        # REFAIRE 
-        #assert len(model_jac.shape) == 2, "Jacobien matrix need to be a matrix (flatten 3D matrix if needed)"
-        #assert model_jac.shape[0] == self.H*state_dim # TODO wron if RNN
-        #assert model_jac.shape[1] == (state_dim + control_dim + tvp_dim + p_dim)
+        x_t_1 =  np.concatenate([x0.reshape(1,-1),x],axis=0)[:-1]
+        model_jac = self.model.jacobian(x_t_1, u, p=p, tvp=tvp)  
 
-        print(model_jac)
+
         # state t - 1 
-        J_extended[state_dim:,0:state_dim*self.H] += model_jac[:-state_dim,0:state_dim*self.H]#make_diag_from_2D(model_jac[state_dim:, 0:state_dim])
+        J_extended[state_dim:,0:state_dim*(self.H-1)] += np.eye(state_dim*(self.H-1),state_dim*(self.H-1) )
+        J_extended[state_dim:,0:state_dim*(self.H-1)] += model_jac[state_dim:,state_dim:state_dim*self.H]#make_diag_from_2D(model_jac[state_dim:, 0:state_dim])
 
         # U
-        J_extended[:,state_dim:(state_dim+control_dim)*self.H] =  model_jac[:,state_dim:(state_dim+control_dim)*self.H]#make_diag_from_2D(model_jac[:, state_dim:state_dim+control_dim])
+        J_extended[:,state_dim*self.H:(state_dim+control_dim)*self.H] +=  model_jac[:,state_dim*self.H:(state_dim+control_dim)*self.H]#make_diag_from_2D(model_jac[:, state_dim:state_dim+control_dim])
 
-        """
-        # tvp
-        if not tvp is None:
-            J_extended[:,state_dim:state_dim+control_dim] = make_diag_from_2D(model_jac[:, state_dim:state_dim+control_dim])
- 
-        # p
-        if not p is None:
-            J_extended[:,-p_dim:] = model_jac[:,-p_dim:]
-        """
         return J_extended
 
 
-    def hessian(self, u, x0, lagrange, p=None, tvp=None) -> np.ndarray:
-        raise NotImplementedError("Hessian not supported yet !")
+    def hessian(self, x, u, x0, p=None, tvp=None) -> np.ndarray:
+        x_t_1 =  np.concatenate([x0.reshape(1,-1),x],axis=0)[:-1]
 
+        model_H = self.model.hessian(x_t_1, u, x0, p=p, tvp=tvp)
+
+        model_H = model_H.reshape(-1,*model_H.shape[2:])
+        final_H = np.zeros_like(model_H)
+        # x_t x x_t 
+        final_H[:,:x.shape[1]*(x.shape[0]-1), 0:x.shape[1]*(x.shape[0]-1)] += model_H[:,x.shape[1]:x.shape[1]*x.shape[0], x.shape[1]:x.shape[1]*x.shape[0]]
+        # u_t x u_t
+        final_H[:,x.shape[1]*x.shape[0]:, x.shape[1]*x.shape[0]:] += model_H[:,x.shape[1]*x.shape[0]:, x.shape[1]*x.shape[0]:]
+
+        # x_t x u_t
+        final_H[:, :x.shape[1]*(x.shape[0]-1), x.shape[1]*x.shape[0]:] += model_H[:,x.shape[1]:x.shape[1]*x.shape[0], x.shape[1]*x.shape[0]:]
+
+        # u_t x x_t
+        final_H[:,x.shape[1]*x.shape[0]:,  :x.shape[1]*(x.shape[0]-1) ] += model_H[:,  x.shape[1]*x.shape[0]:, x.shape[1]:x.shape[1]*x.shape[0] ]
+
+        
+        print("final_H" , model_H)
+
+        print("final_H" , final_H)
+        return final_H
+
+    def hessianstructure(self, nb_sample=3):
+        # Try with brut force to identify non nul hessian coord
+        # TODO add p and tvp 
+
+        hessian_map = None
+
+        for _ in range(nb_sample):
+            x_random = np.random.uniform(size=(self.H, self.model.x_dim))
+            u_random = np.random.uniform(size=(self.H, self.model.u_dim))
+            p_random = None
+            tvp_random = None
+
+            if self.model.p_dim > 0:
+                p_random = np.random.uniform(size=self.model.p_dim)
+            
+            if self.model.tvp_dim > 0:
+                tvp_random = np.random.uniform(size=(self.H, self.model.tvp_dim))
+            
+            hessian  = self.model.hessian(x_random, u_random, x_random[0,:],p=p_random, tvp=tvp_random)
+
+            if hessian_map is None:
+                hessian_map = (hessian!= 0.0).astype(np.float64)
+            else:
+                hessian_map += (hessian!= 0.0).astype(np.float64)
+                hessian_map = hessian_map.astype(np.bool).astype(np.float64)
+        hessian_map  = np.sum(hessian_map, axis=[0,1]).astype(np.bool).astype(np.float64)
+        return hessian_map

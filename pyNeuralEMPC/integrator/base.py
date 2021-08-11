@@ -3,7 +3,7 @@ from ..model.base import Model
 
 
 class Integrator():
-    def __init__(self, model, H: int):
+    def __init__(self, model, H: int, nb_contraints: int):
         """Base integrator constructor.
 
         Args:
@@ -18,6 +18,7 @@ class Integrator():
 
         self.H = H
         self.model = model
+        self.nb_contraints = nb_contraints
 
     def get_dim(self) -> float:
         """Return the number of constraint generated.
@@ -64,12 +65,11 @@ class Integrator():
         """
         raise NotImplementedError("")
 
-    def hessian(self, u, x0, lagrange, p=None, tvp=None) -> np.ndarray:
+    def hessian(self, u, x0, p=None, tvp=None) -> np.ndarray:
         """Generate the hessian matrix.
 
         Args:
             u (np.ndarray): The current control matrix.
-            lagrange (list): A list of all lagrande coefficient value. 
 
         Returns:
             np.ndarray: The hessian matrix.
@@ -77,7 +77,12 @@ class Integrator():
         """
         raise NotImplementedError("")
 
+    def get_lower_bounds(self):
+        return [0.0,]*self.nb_contraints
 
+    def get_upper_bounds(self):
+        return [0.0,]*self.nb_contraints
+        
 
 class NoIntegrator(Integrator):
     # TODO implement a No integrator when user do not way to use conventional way

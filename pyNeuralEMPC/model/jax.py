@@ -26,35 +26,18 @@ class DiffDiscretJaxModel(Model):
         super(DiffDiscretJaxModel, self).__init__(x_dim, u_dim, p_dim, tvp_dim)
 
 
-    def _split(self, x):# forcement en vector mode 
-        states = x[:,0:self.x_dim]
-        u = x[:,self.x_dim:self.x_dim+self.u_dim]
-        tvp = None if self.tvp_dim == 0 else x[:,self.x_dim+self.u_dim:self.x_dim+self.u_dim+self.tvp_dim]
-        p   = None if self.p_dim   == 0 else x[:,self.x_dim+self.u_dim+self.tvp_dim:self.x_dim+self.u_dim+self.tvp_dim+self.p_dim]
-        return states, u, tvp, p
-
-
-    def forward(self, x):
+    def forward(self, x: np.ndarray, u: np.ndarray, p=None, tvp=None):
         if self.vector_mode:
-            states, u, tvp, p = self._split(x)
-            return self.forward_func(states, u, p=p, tvp=tvp)
+            return self.forward_func(x, u, p=p, tvp=tvp)
         else:
             raise NotImplementedError("")
 
 
-    def jacobian(self, x):
+    def jacobian(self, x: np.ndarray, u: np.ndarray, p=None, tvp=None):
         if self.vector_mode:
-                
-            states, u, tvp, p = self._split(x)
-
             argnums_list = [0, 1]
-            if self.tvp_dim>0:
-                argnums_list.append(3)
-            if self.p_dim>0:
-                argnums_list.append(2)
-            jacobians = list(jax.jacobian(self.forward_func, argnums=argnums_list)(states, u, p, tvp))
-            #jacobians = [ np.stack([jacobian[i,:,i,:].to_py()  for i in range(x.shape[0])]) for jacobian in jacobians]
 
+            jacobians = list(jax.jacobian(self.forward_func, argnums=argnums_list)(x, u, p, tvp))
 
             jacobians[0] = jacobians[0].reshape(self.x_dim*x.shape[0], self.x_dim*x.shape[0] )
             jacobians[1] = jacobians[1].reshape(self.x_dim*x.shape[0], self.u_dim*x.shape[0] )
@@ -64,6 +47,26 @@ class DiffDiscretJaxModel(Model):
         else:
             raise NotImplementedError("")
 
-    def hessian(self, x):
-        raise NotImplementedError("")
+    def hessian(self, x: np.ndarray, u: np.ndarray, x0: np.ndarray, p=None, tvp=None):
+        if self.vector_mode:
+            argnums_list = [0, 1]
+
+            H = x.shape[0]
+            X_dim = x.shape[1]
+            U_dim = u.shape[1]
+
+            hessians = list(jax.hessian(self.forward_func, argnums=argnums_list)(x, u, p, tvp))
+
+            a = hessians[0][0].reshape(H  , X_dim,  H*X_dim, H*X_dim)
+            b = hessians[0][1].reshape(H  , X_dim,  H*X_dim, H*U_dim)
+            ab  = jnp.concatenate([a, b], axis=3)
+
+            c = hessians[1][0].reshape(H  , X_dim,  H*U_dim, H*X_dim)
+            d = hessians[1][1].reshape(H  , X_dim,  H*U_dim, H*U_dim)
+            cd  = jnp.concatenate([c, d], axis=3)
+
+            final_hessian = jnp.concatenate([ab, cd], axis=2)
+            return final_hessian
+        else:
+            raise NotImplementedError("")
 

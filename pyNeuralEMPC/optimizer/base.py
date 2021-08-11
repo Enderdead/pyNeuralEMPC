@@ -15,10 +15,10 @@ class ProblemInterface():
     """
     def hessianstructure(self):
         raise NotImplementedError("")
-
+    """
     def hessian(self, x):
         raise NotImplementedError("")
-    """
+
     def jacobian(self, x):
         raise NotImplementedError("")
 
