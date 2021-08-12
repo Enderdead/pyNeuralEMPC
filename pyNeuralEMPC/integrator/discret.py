@@ -92,7 +92,8 @@ class DiscretIntegrator(Integrator):
         x_t_1 =  np.concatenate([x0.reshape(1,-1),x],axis=0)[:-1]
 
         model_H = self.model.hessian(x_t_1, u, p=p, tvp=tvp)
-        print("aie", model_H[-1])
+
+
         model_H = model_H.reshape(-1,*model_H.shape[2:])
         final_H = np.zeros_like(model_H)
         # x_t x x_t 

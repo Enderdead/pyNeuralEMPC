@@ -52,16 +52,20 @@ class KerasTFModel(Model):
             output_tf = self.model(input_tf)
         
         jacobian_tf = tx.jacobian(output_tf, input_tf)
-        # TODO check this projection
 
-        jacobian_np = jacobian_tf.numpy()[:,:,:,0:self.x_dim+self.u_dim]
         jacobian_np = jacobian_tf.numpy().reshape(x.shape[0]*self.x_dim, (self.x_dim+self.u_dim)*x.shape[0])
         
+
+        reshape_indexer = sum([ list(np.arange(x.shape[1])+i*(x.shape[1]+u.shape[1])) for i in range(x.shape[0])  ], list()) + \
+             sum([ list( x.shape[1]+np.arange(u.shape[1])+i*(x.shape[1]+u.shape[1])) for i in range(x.shape[0])  ], list())
+
+        jacobian_np = np.take(jacobian_np, reshape_indexer, axis=1)
+
         return jacobian_np
     
     @tf.function
     def _hessian_compute(self, input_tf):
-        print("tracing :", input_tf)
+
         hessian_mask = tf.reshape(tf.eye(tf.shape(input_tf)[0]*self.model.output_shape[-1],tf.shape(input_tf)[0]*self.model.output_shape[-1]), (tf.shape(input_tf)[0]*self.model.output_shape[-1],tf.shape(input_tf)[0],self.model.output_shape[-1]))
         hessian_mask = tf.cast(hessian_mask, tf.float64)
 
@@ -79,9 +83,14 @@ class KerasTFModel(Model):
         #hessian_np = self.test(input_tf, int(self.model.output_shape[-1])).numpy()
         
         hessian_np = self._hessian_compute(input_tf).numpy()
-        print(hessian_np.shape)
 
-
+        # TODO a better implem could be by spliting input BEFORE performing the hessian computation !
         hessian_np = hessian_np.reshape(x.shape[0], x.shape[1], input_np.shape[1]*input_np.shape[0], input_np.shape[1]*input_np.shape[0])
-        print(hessian_np.shape)
+        
+        reshape_indexer = sum([ list(np.arange(x.shape[1])+i*(x.shape[1]+u.shape[1])) for i in range(x.shape[0])  ], list()) + \
+             sum([ list( x.shape[1]+np.arange(u.shape[1])+i*(x.shape[1]+u.shape[1])) for i in range(x.shape[0])  ], list())
+
+        hessian_np = np.take(hessian_np, reshape_indexer, axis=2)
+        hessian_np = np.take(hessian_np, reshape_indexer, axis=3)
+
         return hessian_np
