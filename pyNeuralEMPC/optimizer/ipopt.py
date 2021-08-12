@@ -156,10 +156,10 @@ class Ipopt(Optimizer):
             )
 
         nlp.addOption('max_iter',            self.max_iteration)# 
-        nlp.addOption('derivative_test', 'second-order')
+        #nlp.addOption('derivative_test', 'second-order')
         #nlp.addOption('derivative_test_print_all', 'yes')
-        nlp.addOption('point_perturbation_radius',1e-1)
-        nlp.addOption('derivative_test_perturbation',1e-1)
+        #nlp.addOption('point_perturbation_radius',1e-1)
+        #nlp.addOption('derivative_test_perturbation',1e-3)
 
         #nlp.addOption('mu_strategy',               self.mu_strategy) 
         #nlp.addOption('mu_target',                 self.mu_target)
@@ -170,7 +170,7 @@ class Ipopt(Optimizer):
             
 
         x, info = nlp.solve(x_init)
-
+        self.prev_result = x
         if info["status"] == 0 or info["status"] == 1 :
             self.prev_result = x
             return Optimizer.SUCCESS
