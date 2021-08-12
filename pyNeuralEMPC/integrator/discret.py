@@ -11,6 +11,7 @@ def make_diag_from_2D(A: np.ndarray):
 
 
 class DiscretIntegrator(Integrator):
+
     def __init__(self, model, H):
         nb_contraints = model.x_dim*H
         super(DiscretIntegrator, self).__init__(model, H, nb_contraints)
@@ -90,8 +91,8 @@ class DiscretIntegrator(Integrator):
     def hessian(self, x, u, x0, p=None, tvp=None) -> np.ndarray:
         x_t_1 =  np.concatenate([x0.reshape(1,-1),x],axis=0)[:-1]
 
-        model_H = self.model.hessian(x_t_1, u, x0, p=p, tvp=tvp)
-
+        model_H = self.model.hessian(x_t_1, u, p=p, tvp=tvp)
+        print("aie", model_H[-1])
         model_H = model_H.reshape(-1,*model_H.shape[2:])
         final_H = np.zeros_like(model_H)
         # x_t x x_t 
@@ -126,7 +127,7 @@ class DiscretIntegrator(Integrator):
             if self.model.tvp_dim > 0:
                 tvp_random = np.random.uniform(size=(self.H, self.model.tvp_dim))
             
-            hessian  = self.model.hessian(x_random, u_random, x_random[0,:],p=p_random, tvp=tvp_random)
+            hessian  = self.model.hessian(x_random, u_random, p=p_random, tvp=tvp_random)
 
 
             hessian = hessian.reshape(-1,*hessian.shape[2:])

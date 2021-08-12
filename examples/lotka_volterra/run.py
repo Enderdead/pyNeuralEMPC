@@ -7,7 +7,6 @@ args = parser.parse_args()
 
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 
 from dyna_toy_envs.virtuel.lotka_volterra import lotka_volterra_energy
@@ -61,13 +60,13 @@ input_tensor = tf.constant(np.array([[50.0,5.0,0.0],[50.0,5.0,0.0]]))
 
 
 
-model_nmpc = nEMPC.model.tensorflow.KerasTFModel(keras_model, x_dim=2, u_dim=1)
 
 def forward_jnp(x, u, p=None, tvp=None):
     result = jnp.repeat( u[:,0].reshape(-1,1), x.shape[-1],  axis=1)*x/2.0 
     return result
 
 model_nmpc = nEMPC.model.jax.DiffDiscretJaxModel(forward_jnp, x_dim=2, u_dim=1, vector_mode=True)
+model_nmpc = nEMPC.model.tensorflow.KerasTFModel(keras_model, x_dim=2, u_dim=1)
 
 
 constraints_nmpc = [nEMPC.constraints.DomainConstraint(

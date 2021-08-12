@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np  
 
 from .base import Model
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 
 class KerasTFModel(Model):
@@ -25,6 +26,7 @@ class KerasTFModel(Model):
         super(KerasTFModel, self).__init__(x_dim, u_dim, p_dim, tvp_dim)
 
         self.model = model
+        self.test = None
 
     def _gather_input(self, x: np.ndarray, u: np.ndarray, p=None, tvp=None):
         output_np = np.concatenate([x, u], axis=1)
@@ -53,28 +55,33 @@ class KerasTFModel(Model):
         # TODO check this projection
 
         jacobian_np = jacobian_tf.numpy()[:,:,:,0:self.x_dim+self.u_dim]
-        jacobian_np = jacobian_tf.numpy().reshape(self.H*self.x_dim, (self.x_dim+self.u_dim)*self.H)
+        jacobian_np = jacobian_tf.numpy().reshape(x.shape[0]*self.x_dim, (self.x_dim+self.u_dim)*x.shape[0])
         
         return jacobian_np
+    
+    @tf.function
+    def _hessian_compute(self, input_tf):
+        print("tracing :", input_tf)
+        hessian_mask = tf.reshape(tf.eye(tf.shape(input_tf)[0]*self.model.output_shape[-1],tf.shape(input_tf)[0]*self.model.output_shape[-1]), (tf.shape(input_tf)[0]*self.model.output_shape[-1],tf.shape(input_tf)[0],self.model.output_shape[-1]))
+        hessian_mask = tf.cast(hessian_mask, tf.float64)
+
+        output_tf =  self.model(input_tf)
+        output_tf = tf.cast(output_tf, tf.float64)
+        result = tf.map_fn(lambda mask : tf.hessians(output_tf*mask, input_tf)[0] , hessian_mask, dtype=tf.float32)
+
+        return result
 
     def hessian(self, x: np.ndarray, u: np.ndarray, p=None, tvp=None):
         input_np = self._gather_input(x, u, p=p, tvp=tvp)
-        input_tf = tf.constant(input_np)
+        input_tf = tf.constant(input_np, dtype=tf.float32)
+        #if self.test is None:
+        #    self.test  = self._hessian_compute.get_concrete_function(input_tf=tf.TensorSpec([input_tf.shape[0], input_tf.shape[1]], tf.float64), output_shape=int(self.model.output_shape[-1]))
+        #hessian_np = self.test(input_tf, int(self.model.output_shape[-1])).numpy()
+        
+        hessian_np = self._hessian_compute(input_tf).numpy()
+        print(hessian_np.shape)
 
-        hessian_tf_list = list()
-        raise ValueError("Need to be re implemented")
 
-        for i in range(self.output_dim):
-
-            with tf.GradientTape(persistent=False) as tx_2:
-                tx_2.watch(input_tf)
-                with tf.GradientTape(persistent=False) as tx_1:
-                    tx_1.watch(input_tf)
-                    output_tf =  self.model(input_tf)[:,i]
-                g = tx_1.gradient(output_tf, input_tf)
-                    
-            hessian_tf_list.append(tx_2.jacobian(g, input_tf))
-
-        hessian_np_list = [ np.stack([hessian[i,:,i,:].numpy()  for i in range(input_tf.shape[0])]) for hessian in hessian_tf_list]
-
-        return hessian_np_list
+        hessian_np = hessian_np.reshape(x.shape[0], x.shape[1], input_np.shape[1]*input_np.shape[0], input_np.shape[1]*input_np.shape[0])
+        print(hessian_np.shape)
+        return hessian_np

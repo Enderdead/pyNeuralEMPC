@@ -47,7 +47,7 @@ class DiffDiscretJaxModel(Model):
         else:
             raise NotImplementedError("")
 
-    def hessian(self, x: np.ndarray, u: np.ndarray, x0: np.ndarray, p=None, tvp=None):
+    def hessian(self, x: np.ndarray, u: np.ndarray, p=None, tvp=None):
         if self.vector_mode:
             argnums_list = [0, 1]
 
@@ -66,6 +66,8 @@ class DiffDiscretJaxModel(Model):
             cd  = jnp.concatenate([c, d], axis=3)
 
             final_hessian = jnp.concatenate([ab, cd], axis=2)
+            print(final_hessian.shape)
+            1/0
             return final_hessian
         else:
             raise NotImplementedError("")

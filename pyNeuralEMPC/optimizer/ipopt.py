@@ -157,7 +157,7 @@ class Ipopt(Optimizer):
 
         nlp.addOption('max_iter',            self.max_iteration)# 
         nlp.addOption('derivative_test', 'second-order')
-        nlp.addOption('derivative_test_print_all', 'yes')
+        #nlp.addOption('derivative_test_print_all', 'yes')
         nlp.addOption('point_perturbation_radius',1e-1)
         nlp.addOption('derivative_test_perturbation',1e-1)
 
