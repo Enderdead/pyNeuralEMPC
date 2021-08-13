@@ -35,30 +35,6 @@ class DiscretIntegrator(Integrator):
         # return flatten constraint error
         return (estim_x_t - x_t).reshape(-1)
 
-    def _format_input(self, x, u, x0, p=None, tvp=None):
-        # Create the input tensorflow for model forcasting
-
-        list_input_values_t_1 = [np.concatenate([x0.reshape(1,-1),x])[:-1], u] 
-
-        # Include tvp if present
-        if not tvp is None:
-
-            assert len(tvp.shape) == 2, "tvp must have dim 2"
-            assert tvp.shape[1] == x.shape[1], "tvp must get the 2nd dim as x"
-
-            list_input_values_t_1.append(tvp)
-
-        # Include p if present
-        if not p is None:
-
-            assert len(p.shape) == 1, "p must be a vector"
-
-            list_input_values_t_1.append(np.ones((x.shape[0], len(p)))*p)
-
-        states_t_1_extended = np.concatenate(list_input_values_t_1, axis=1)
-
-        return states_t_1_extended
-
     def jacobian(self, x, u, x0, p=None, tvp=None) -> np.ndarray:
         state_dim   = self.model.x_dim
         control_dim = self.model.u_dim
