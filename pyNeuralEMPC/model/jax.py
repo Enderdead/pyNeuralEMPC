@@ -67,7 +67,7 @@ class DiffDiscretJaxModel(Model):
 
             final_hessian = jnp.concatenate([ab, cd], axis=2)
 
-            return final_hessian
+            return final_hessian.to_py()
         else:
             raise NotImplementedError("")
 

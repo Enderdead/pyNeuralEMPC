@@ -3,12 +3,6 @@ import numpy as np
 
 
 
-def make_diag_from_2D(A: np.ndarray):
-    result = np.zeros((A.shape[0], A.shape[0]*A.shape[1]))
-    for i, sub_element in enumerate(A):
-        result[i:i+1, i*A.shape[1] : (i+1)*A.shape[1]] = sub_element
-    return result
-
 
 class DiscretIntegrator(Integrator):
 
