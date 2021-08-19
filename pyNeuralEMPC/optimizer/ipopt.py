@@ -2,7 +2,7 @@ from .base import Optimizer, ProblemFactory, ProblemInterface
 
 import numpy as np 
 import cyipopt
-
+import time
 
 class IpoptProblem(ProblemInterface):
     def __init__(self, x0, objective_func, constraints, integrator, p=None, tvp=None):
@@ -27,14 +27,25 @@ class IpoptProblem(ProblemInterface):
 
     def objective(self, x):
         # TODO split les dt !!!!
+        start = time.time()
+
         states, u, tvp, p = self._split(x)
-        return self.objective_func.forward(states, u, p=p, tvp=tvp)
+        res =  self.objective_func.forward(states, u, p=p, tvp=tvp)
+
+        return res
 
     def gradient(self, x):
+        start = time.time()
+
         states, u, tvp, p = self._split(x)
-        return self.objective_func.gradient(states, u, p=p, tvp=tvp)
+
+        res =  self.objective_func.gradient(states, u, p=p, tvp=tvp)
+
+        return res
 
     def constraints(self, x):
+        start = time.time()
+
         states, u, tvp, p = self._split(x)
 
         contraints_forward_list = [self.integrator.forward(states, u, self.x0, p=p, tvp=tvp),]
@@ -46,7 +57,7 @@ class IpoptProblem(ProblemInterface):
 
     
     def hessianstructure(self):
-
+        start = time.time()
         hessian_map_objective = self.objective_func.hessianstructure(  self.integrator.H, self.integrator.model)
 
         hessian_map_integrator = self.integrator.hessianstructure()
@@ -58,6 +69,8 @@ class IpoptProblem(ProblemInterface):
 
     
     def hessian(self, x, lagrange, obj_factor):
+        start = time.time()
+
         states, u, tvp, p = self._split(x)
         
         hessian_matrice = np.zeros((x.shape[0], x.shape[0]))
@@ -68,7 +81,6 @@ class IpoptProblem(ProblemInterface):
         
         # TODO add constraints 
         for idx, lagrange_coef in enumerate(lagrange): # TODO remove this loop (vec comp)
-
             hessian_matrice+=lagrange_coef*integrator_hessian_matrice[idx]
 
 
@@ -77,13 +89,15 @@ class IpoptProblem(ProblemInterface):
         return hessian_matrice[row, col]
 
     def jacobian(self, x):
+        start = time.time()
+
         states, u, tvp, p = self._split(x)
 
         contraints_jacobian_list = [self.integrator.jacobian(states, u, self.x0, p=p, tvp=tvp),]
 
         for ctr in self.constraints_list:
             contraints_jacobian_list.append(ctr.jacobian(states, u, p=p, tvp=tvp))
-        
+
         return np.concatenate(contraints_jacobian_list, axis=0)
 
     def get_init_value(self):
@@ -155,11 +169,11 @@ class Ipopt(Optimizer):
             cu=cu
             )
 
-        nlp.addOption('max_iter',          1)#  self.max_iteration)# 
-        nlp.addOption('derivative_test', 'second-order')
-        nlp.addOption('derivative_test_print_all', 'yes')
-        nlp.addOption('point_perturbation_radius',1e-3)
-        nlp.addOption('derivative_test_perturbation',1e-4)
+        nlp.addOption('max_iter',          self.max_iteration)#  self.max_iteration)# 
+        #nlp.addOption('derivative_test', 'second-order')
+        #nlp.addOption('derivative_test_print_all', 'yes')
+        #nlp.addOption('point_perturbation_radius',1e-1)
+        #nlp.addOption('derivative_test_perturbation',1e-1)
 
         #nlp.addOption('mu_strategy',               self.mu_strategy) 
         #nlp.addOption('mu_target',                 self.mu_target)

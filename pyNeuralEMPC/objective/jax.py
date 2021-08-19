@@ -23,6 +23,7 @@ class JAXObjectifFunc(ObjectiveFunc):
             raise ValueError("Your function is not differentiable w.r.t the JAX library")
         """
         self.func = func
+        self.cached_hessian_structure = dict()
 
     def forward(self, states, u, p=None, tvp=None):
 
@@ -60,7 +61,15 @@ class JAXObjectifFunc(ObjectiveFunc):
 
         return final_hessian
 
-    def hessianstructure(self, H, model, nb_sample=3):
+    def hessianstructure(self, H, model):
+        if (H, model) in self.cached_hessian_structure.keys():
+            return self.cached_hessian_structure[(H, model)]
+        else:
+            result = self._compute_hessianstructure(H, model)
+            self.cached_hessian_structure[(H, model)] = result
+            return result
+
+    def _compute_hessianstructure(self, H, model, nb_sample=3):
         hessian_map = None
 
         for _ in range(nb_sample):

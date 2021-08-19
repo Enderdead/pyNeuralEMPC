@@ -1,7 +1,7 @@
 from .base import Integrator
 import numpy as np 
-
-
+import time
+import hashlib
 def extend_dim(array, size, axis=0, value=0.0):
     target_shape = list(array.shape)
     target_shape[axis] = size
@@ -17,12 +17,42 @@ def make_diag_from_2D(A: np.ndarray):
     return result
 
 
+class TensorCache:
+    def __init__(self, max_size=5):
+        self.keys = list()
+        self.datas = list()
+        self.max_size = max_size
+    
+    def pull(self, *args):
+        hash_key = hash("".join(map(lambda x: str(x), args)))
+        if hash_key in self.keys:
+            return self.datas[self.keys.index(hash_key)]
+        else:
+            return None
+
+    def push(self, key, value):
+        hash_key = hash("".join(map(lambda x: str(x), key)))
+        if hash_key in self.keys:
+            self.datas[self.keys.index(hash_key)] = value
+        else:
+            if len(self.keys)>=self.max_size:
+                del self.keys[0]
+                del self.datas[0]
+            
+            self.keys.append(hash_key)
+            self.datas.append(value)
+        
+
 class RK4Integrator(Integrator):
 
-    def __init__(self, model, H, DT):
+    def __init__(self, model, H, DT, cache_mode=False, cache_size=2):
         self.DT = DT
         nb_contraints = model.x_dim*H
+        self.cache_mode = cache_mode
+        self.forward_cache = TensorCache(max_size=cache_size) if self.cache_mode else None
+        self.jacobian_cache = TensorCache(max_size=cache_size) if self.cache_mode else None
         super(RK4Integrator, self).__init__(model, H, nb_contraints)
+
 
     def forward(self, x: np.ndarray, u: np.ndarray, x0: np.ndarray, p=None, tvp=None)-> np.ndarray:
 
@@ -41,6 +71,10 @@ class RK4Integrator(Integrator):
         k_3 = self.model.forward( x_t_1 + k_2*self.DT/2.0, u, p=p, tvp=tvp) 
         k_4 = self.model.forward( x_t_1 + k_3*self.DT, u, p=p, tvp=tvp)
 
+        # Push into cache if needed
+        if self.cache_mode:
+            self.forward_cache.push( (x, u, x0, p, tvp),  (k_1, k_2, k_3, k_4) )
+
         d_x_t_1  = (k_1 + 2*k_2+ 2*k_3 + k_4)*self.DT/6.0
         # Get discret differential prediction from the model
         estim_x_t = x_t_1 + d_x_t_1
@@ -49,8 +83,6 @@ class RK4Integrator(Integrator):
         return (estim_x_t - x_t).reshape(-1)
 
     def _get_model_jacobian(self, x_t_1, u, p=None, tvp=None):
-        jaco = self.model.jacobian(x_t_1, u, p=p, tvp=tvp)
-
         jaco = self.model.jacobian(x_t_1, u, p=p, tvp=tvp)
         reshape_indexer = sum([ list(np.arange(x_t_1.shape[1])+i*x_t_1.shape[1]) + \
          list( x_t_1.shape[1]*x_t_1.shape[0]+np.arange(u.shape[1])+ i*u.shape[1])  for i in range(x_t_1.shape[0])  ], list())
@@ -79,6 +111,7 @@ class RK4Integrator(Integrator):
 
 
     def jacobian(self, x, u, x0, p=None, tvp=None) -> np.ndarray:
+        start = time.time()
         state_dim   = self.model.x_dim
         control_dim = self.model.u_dim
         tvp_dim     = self.model.tvp_dim
@@ -95,8 +128,17 @@ class RK4Integrator(Integrator):
 
         x_t_1 =  np.concatenate([x0.reshape(1,-1),x],axis=0)[:-1]
 
-        k_1 = self.model.forward( x_t_1, u, p=p, tvp=tvp)
+        if self.cache_mode:
+            cache_data = self.forward_cache.pull(x, u, x0, p, tvp)
+        else:
+            cache_data = None
 
+        if cache_data is None:
+            k_1 = self.model.forward( x_t_1, u, p=p, tvp=tvp)
+            k_2 = self.model.forward( x_t_1 + k_1*self.DT/2.0, u, p=p, tvp=tvp) 
+            k_3 = self.model.forward( x_t_1 + k_2*self.DT/2.0, u, p=p, tvp=tvp) 
+        else:
+            k_1, k_2, k_3, _ = cache_data
 
         dk1 = self._get_model_jacobian(x_t_1, u, p=p, tvp=tvp)
 
@@ -105,22 +147,23 @@ class RK4Integrator(Integrator):
         partial_dk2 = self._get_model_jacobian(x_t_1 + k_1*self.DT/2.0, u, p=p, tvp=tvp).reshape(x_t_1.shape[0], x_t_1.shape[1], x_t_1.shape[1]+ u.shape[1])
         dk1_extended = extend_dim(dk1,u.shape[1], axis=1)
         dk2 = np.einsum('ijk,ikl->ijl',partial_dk2,  np.eye(x_t_1.shape[1]+u.shape[1] ,x_t_1.shape[1]+u.shape[1] )+dk1_extended*self.DT/2.0)
-        k_2 = self.model.forward( x_t_1 + k_1*self.DT/2.0, u, p=p, tvp=tvp) 
 
         partial_dk3 = self._get_model_jacobian(x_t_1 + k_2*self.DT/2.0, u, p=p, tvp=tvp).reshape(x_t_1.shape[0], x_t_1.shape[1], x_t_1.shape[1]+ u.shape[1])
         dk2_extended = extend_dim(dk2,u.shape[1], axis=1) 
         dk3 = np.einsum('ijk,ikl->ijl',partial_dk3,  np.eye(x_t_1.shape[1]+u.shape[1] ,x_t_1.shape[1]+u.shape[1] )+dk2_extended*self.DT/2.0)
-        k_3 = self.model.forward( x_t_1 + k_2*self.DT/2.0, u, p=p, tvp=tvp) 
 
         partial_dk4 = self._get_model_jacobian(x_t_1 + k_3*self.DT, u, p=p, tvp=tvp).reshape(x_t_1.shape[0], x_t_1.shape[1], x_t_1.shape[1]+ u.shape[1])
         dk3_extended = extend_dim(dk3,u.shape[1], axis=1) 
         dk4 = np.einsum('ijk,ikl->ijl',partial_dk4,  np.eye(x_t_1.shape[1]+u.shape[1] ,x_t_1.shape[1]+u.shape[1] )+dk3_extended*self.DT)
         
         model_jac =  (self.DT/6.0) * (  dk1 + 2*dk2+ 2*dk3+ dk4)
+
+        if self.cache_mode:
+            self.jacobian_cache.push((x, u, x0, p, tvp), (dk1, partial_dk2, partial_dk3, partial_dk4))
+
         model_jac = model_jac.reshape(x_t_1.shape[0],x_t_1.shape[1], x_t_1.shape[1]+u.shape[1])
 
         #model_jac_extended = np.array([ np.concatenate([np.zeros((x_t_1.shape[1]*i, x_t_1.shape[1]+u.shape[1])) ,model_jac[i,:,:],np.zeros(((x_t_1.shape[0]-i)* x_t_1.shape[1], x_t_1.shape[1]+u.shape[1]))  ], axis=1)   for i in range(x_t_1.shape[0])], )
-
         # state t - 1 
         J_extended[state_dim:,0:state_dim*(self.H-1)] += np.eye(state_dim*(self.H-1),state_dim*(self.H-1) )
 
@@ -131,6 +174,7 @@ class RK4Integrator(Integrator):
 
             # U
             J_extended[state_dim*i:state_dim*(i+1),state_dim*self.H+control_dim*i:state_dim*self.H+control_dim*(i+1)] +=  model_jac[i, :,state_dim:]
+
         return J_extended
 
 
@@ -155,46 +199,74 @@ class RK4Integrator(Integrator):
         x_t_1 =  np.concatenate([x0.reshape(1,-1),x],axis=0)[:-1]
         # TODO add security about rnn
 
-        # K1 
-        k_1 = self.model.forward( x_t_1, u, p=p, tvp=tvp) # (2,2)
-        dk1 = self._get_model_jacobian(x_t_1, u, p=p, tvp=tvp) # (2,2,3)
+
+        if self.cache_mode:
+            forward_cache_data = self.forward_cache.pull(x, u, x0, p, tvp)
+        else:
+            forward_cache_data = None
+
+        if forward_cache_data is None:
+            k_1 = self.model.forward( x_t_1, u, p=p, tvp=tvp)# (2,2)
+            k_2 = self.model.forward( x_t_1 + k_1*self.DT/2.0, u, p=p, tvp=tvp) # (2,2)
+            k_3 = self.model.forward( x_t_1 + k_2*self.DT/2.0, u, p=p, tvp=tvp) # (2,2)
+        else:
+            k_1, k_2, k_3, _ = forward_cache_data
+
+
+        if self.cache_mode:
+            jacobian_cache_data = self.jacobian_cache.pull(x, u, x0, p, tvp)
+        else:
+            jacobian_cache_data = None
+
+        if jacobian_cache_data is None:
+            dk1 = self._get_model_jacobian(x_t_1, u, p=p, tvp=tvp)# (2,3,3)
+            partial_dk2 = self._get_model_jacobian(x_t_1 + k_1*self.DT/2.0, u, p=p, tvp=tvp)# (2,3,3)
+            partial_dk3 = self._get_model_jacobian(x_t_1 + k_2*self.DT/2.0, u, p=p, tvp=tvp) # (2,3,3)
+            partial_dk4 = self._get_model_jacobian(x_t_1 + k_3*self.DT, u, p=p, tvp=tvp) # (2,3,3)
+        else:
+            dk1, partial_dk2, partial_dk3, partial_dk4 = jacobian_cache_data
+
+
+ 
+
+
+
+
+        #dk1 = self._get_model_jacobian(x_t_1, u, p=p, tvp=tvp) # (2,2,3)
 
         dk1_extended = extend_dim(dk1,u.shape[1], axis=1) # (2,3,3)
         h_k1 = self._get_model_hessian(x_t_1, u, p=p, tvp=tvp)# (2, 2, 3, 3)
         
 
         # K2
-        k_2 = self.model.forward( x_t_1 + k_1*self.DT/2.0, u, p=p, tvp=tvp) 
-        partial_dk2 = self._get_model_jacobian(x_t_1 + k_1*self.DT/2.0, u, p=p, tvp=tvp).reshape(x_t_1.shape[0], x_t_1.shape[1], x_t_1.shape[1]+ u.shape[1])
+        #partial_dk2 = self._get_model_jacobian(x_t_1 + k_1*self.DT/2.0, u, p=p, tvp=tvp).reshape(x_t_1.shape[0], x_t_1.shape[1], x_t_1.shape[1]+ u.shape[1])
         dk2 = np.einsum('ijk,ikl->ijl',partial_dk2,  np.eye(x_t_1.shape[1]+u.shape[1] ,x_t_1.shape[1]+u.shape[1] )+dk1_extended*self.DT/2.0)
         dk2_extended = extend_dim(dk2,u.shape[1], axis=1) # (2,3,3)
-        J_local_k2 = self._get_model_jacobian(x_t_1 + k_1*self.DT/2.0, u, p=p, tvp=tvp)# (2,2,3)
+        #J_local_k2 = self._get_model_jacobian(x_t_1 + k_1*self.DT/2.0, u, p=p, tvp=tvp)# (2,2,3)
         relative_j_k1 = np.eye(3,3) + ((self.DT/2.0) * dk1_extended)# (2,3,3)
         relative_h_k2 = self._get_model_hessian(x_t_1 + k_1*self.DT/2.0, u, p=p, tvp=tvp)# (2, 2, 3, 3)
-        h_k2 = dot_right( dot_left(T(relative_j_k1), relative_h_k2),  relative_j_k1) + (self.DT/2.0)*cross_sum(J_local_k2, h_k1)# (2, 2, 3, 3)
+        h_k2 = dot_right( dot_left(T(relative_j_k1), relative_h_k2),  relative_j_k1) + (self.DT/2.0)*cross_sum(partial_dk2, h_k1)# (2, 2, 3, 3)
 
         # K3
-        k_3 = self.model.forward( x_t_1 + k_2*self.DT/2.0, u, p=p, tvp=tvp) 
-        partial_dk3 = self._get_model_jacobian(x_t_1 + k_2*self.DT/2.0, u, p=p, tvp=tvp).reshape(x_t_1.shape[0], x_t_1.shape[1], x_t_1.shape[1]+ u.shape[1])
+        #partial_dk3 = self._get_model_jacobian(x_t_1 + k_2*self.DT/2.0, u, p=p, tvp=tvp).reshape(x_t_1.shape[0], x_t_1.shape[1], x_t_1.shape[1]+ u.shape[1])
         dk3 = np.einsum('ijk,ikl->ijl',partial_dk3,  np.eye(x_t_1.shape[1]+u.shape[1] ,x_t_1.shape[1]+u.shape[1] )+dk2_extended*self.DT/2.0)
         dk3_extended = extend_dim(dk3,u.shape[1], axis=1) # (2,3,3)
-        J_local_k3 = self._get_model_jacobian(x_t_1 + k_2*self.DT/2.0, u, p=p, tvp=tvp)# (2,2,3)
+        #J_local_k3 = self._get_model_jacobian(x_t_1 + k_2*self.DT/2.0, u, p=p, tvp=tvp)# (2,2,3)
         relative_j_k2 = np.eye(3,3) + ((self.DT/2.0) * dk2_extended)# (2,3,3)
         relative_h_k3 = self._get_model_hessian(x_t_1+ k_2*self.DT/2.0, u, p=p, tvp=tvp)# (2, 2, 3, 3)
-        h_k3 = dot_right( dot_left(T(relative_j_k2), relative_h_k3),  relative_j_k2) + (self.DT/2.0)*cross_sum(J_local_k3, h_k2)# (2, 2, 3, 3)
+        h_k3 = dot_right( dot_left(T(relative_j_k2), relative_h_k3),  relative_j_k2) + (self.DT/2.0)*cross_sum(partial_dk3, h_k2)# (2, 2, 3, 3)
         
         # K4
-        J_local_k4 = self._get_model_jacobian(x_t_1 + k_3*self.DT, u, p=p, tvp=tvp)# (2,2,3)
+        #partial_dk4 = self._get_model_jacobian(x_t_1 + k_3*self.DT, u, p=p, tvp=tvp)# (2,2,3)
         relative_j_k3 = np.eye(3,3) + ((self.DT/1.0) * dk3_extended)# (2,3,3)
         relative_h_k4 = self._get_model_hessian(x_t_1 + k_3*self.DT, u, p=p, tvp=tvp)# (2, 2, 3, 3)
-        h_k4 = dot_right( dot_left(T(relative_j_k3), relative_h_k4),  relative_j_k3) + (self.DT/1.0)*cross_sum(J_local_k4, h_k3)# (2, 2, 3, 3)
+        h_k4 = dot_right( dot_left(T(relative_j_k3), relative_h_k4),  relative_j_k3) + (self.DT/1.0)*cross_sum(partial_dk4, h_k3)# (2, 2, 3, 3)
         
 
         model_H =(h_k1 + 2*h_k2 + 2*h_k3 + h_k4)*(self.DT/6.0) #(2,2,3,3)
         final_H = np.zeros((self.H, x_t_1.shape[1], (x_t_1.shape[1]+u.shape[1])*self.H, (x_t_1.shape[1]+u.shape[1])*self.H))
         offset = x.shape[1]*x.shape[0]
 
-        # DOT PRODUCT ISN'T SYMETRIC
         # x_t x x_t 
         for i in range(1, self.H):
             final_H[i,:,x.shape[1]*(i-1):x.shape[1]*i, x.shape[1]*(i-1):x.shape[1]*i] += model_H[i, :, :x.shape[1], :x.shape[1]]
@@ -210,33 +282,6 @@ class RK4Integrator(Integrator):
         for i in range(1, self.H):
             final_H[i, :, offset+i*u.shape[1] :  offset+(i+1)*u.shape[1], x.shape[1]*(i-1):x.shape[1]*i] += model_H[i, :, x.shape[1]:, :x.shape[1]]
 
-        #print(final_H.reshape(-1,*final_H.shape[2:]))
         return final_H.reshape(-1,*final_H.shape[2:])
 
-    def hessianstructure(self, nb_sample=3):
-        # Try with brut force to identify non nul hessian coord
-        # TODO add p and tvp 
 
-        hessian_map = None
-
-        for _ in range(nb_sample):
-            x_random = np.random.uniform(size=(self.H, self.model.x_dim))
-            u_random = np.random.uniform(size=(self.H, self.model.u_dim))
-            p_random = None
-            tvp_random = None
-
-            if self.model.p_dim > 0:
-                p_random = np.random.uniform(size=self.model.p_dim)
-            
-            if self.model.tvp_dim > 0:
-                tvp_random = np.random.uniform(size=(self.H, self.model.tvp_dim))
-            
-            final_hessian  = self.hessian(x_random, u_random, x_random[0:1], p=p_random, tvp=tvp_random)
-
-            if hessian_map is None:
-                hessian_map = (final_hessian!= 0.0).astype(np.float64)
-            else:
-                hessian_map += (final_hessian!= 0.0).astype(np.float64)
-                hessian_map = hessian_map.astype(np.bool).astype(np.float64)
-        hessian_map  = np.sum(hessian_map, axis=0).astype(np.bool).astype(np.float64)
-        return hessian_map
