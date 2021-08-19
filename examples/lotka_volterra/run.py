@@ -36,7 +36,7 @@ import pickle
 
 
 NB_STEPS = 700
-Hb = 2
+Hb = 25
 U_MAX = 60
 U_MIN = 0
 REFRESH_EVERY = 2
@@ -51,7 +51,7 @@ U_MIN = U_MIN/50.0 -1
 
 H = Hb
 
-system = lotka_volterra_energy(dt=DT, init_state=np.array([50.0, 5.0]), H=Hb)
+system = lotka_volterra_energy(dt=DT, init_state=np.array([0.66, -0.9]), H=Hb)
 
 keras_model = tf.keras.models.load_model("./nn_model.h5")
 
@@ -62,11 +62,11 @@ input_tensor = tf.constant(np.array([[50.0,5.0,0.0],[50.0,5.0,0.0]]))
 
 
 def forward_jnp(x, u, p=None, tvp=None):
-    result = jnp.repeat( u[:,0].reshape(-1,1), x.shape[-1],  axis=1)*x/2.0 
+    result = jnp.concatenate([0.5*x[:,0:1] - 0.025*x[:,0:1]*x[:,1:], -0.5*x[:,1:]+ u + 0.005*x[:,0:1]*x[:,1:]     ], axis=1)
     return result
 
-model_nmpc = nEMPC.model.jax.DiffDiscretJaxModel(forward_jnp, x_dim=2, u_dim=1, vector_mode=True)
 model_nmpc = nEMPC.model.tensorflow.KerasTFModel(keras_model, x_dim=2, u_dim=1)
+model_nmpc = nEMPC.model.jax.DiffDiscretJaxModel(forward_jnp, x_dim=2, u_dim=1, vector_mode=True)
 
 
 constraints_nmpc = [nEMPC.constraints.DomainConstraint(
@@ -74,6 +74,7 @@ constraints_nmpc = [nEMPC.constraints.DomainConstraint(
     control_constraint=[[U_MIN, U_MAX]]),]
 
 integrator = nEMPC.integrator.discret.DiscretIntegrator(model_nmpc, H)
+integrator = nEMPC.integrator.rk4.RK4Integrator(model_nmpc, H, 0.1, cache_mode=True)
 
 class LotkaCost:
     def __init__(self, cost_vec):
@@ -83,7 +84,7 @@ class LotkaCost:
         return jnp.sum(u.reshape(-1)*self.cost_vec.reshape(-1))
 
 
-cost_func = LotkaCost(jnp.array([1.1,]*2))
+cost_func = LotkaCost(jnp.array([1.1,]*25))
 
 objective_func = nEMPC.objective.jax.JAXObjectifFunc(cost_func)
 
@@ -92,10 +93,8 @@ MPC = nEMPC.controller.NMPC(integrator, objective_func, constraints_nmpc, H, DT)
 
 curr_x, curr_cost = system.get_init_state()
 
-#cost_func.cost_vec = jnp.array(curr_cost)
-aa = MPC.get_pb(curr_x)
 
-1/0
+
 u, pred = MPC.next(curr_x)
 1/0
 """
