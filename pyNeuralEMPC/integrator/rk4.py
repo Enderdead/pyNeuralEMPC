@@ -116,7 +116,7 @@ class RK4Integrator(Integrator):
         dk3_extended = extend_dim(dk3,u.shape[1], axis=1) 
         dk4 = np.einsum('ijk,ikl->ijl',partial_dk4,  np.eye(x_t_1.shape[1]+u.shape[1] ,x_t_1.shape[1]+u.shape[1] )+dk3_extended*self.DT)
         
-        model_jac =  (self.DT/6.0) * (  dk1 +2.0 *dk2+ 2*dk3+ dk4)
+        model_jac =  (self.DT/6.0) * (  dk1 + 2*dk2+ 2*dk3+ dk4)
         model_jac = model_jac.reshape(x_t_1.shape[0],x_t_1.shape[1], x_t_1.shape[1]+u.shape[1])
 
         #model_jac_extended = np.array([ np.concatenate([np.zeros((x_t_1.shape[1]*i, x_t_1.shape[1]+u.shape[1])) ,model_jac[i,:,:],np.zeros(((x_t_1.shape[0]-i)* x_t_1.shape[1], x_t_1.shape[1]+u.shape[1]))  ], axis=1)   for i in range(x_t_1.shape[0])], )
@@ -135,7 +135,6 @@ class RK4Integrator(Integrator):
 
 
     def hessian(self, x, u, x0, p=None, tvp=None) -> np.ndarray:
-
         def T(array):
             return np.transpose(array, (0, 2, 1))
         
@@ -143,7 +142,7 @@ class RK4Integrator(Integrator):
             return np.einsum('ijk,ipkl->ipjl', a, b)
 
         def dot_right(a, b):
-            return np.einsum('ipkl,ijk->ipjl', a, b)
+            return np.einsum('ipkl,ilj->ipkj', a, b)
 
         def cross_sum(j, h):
             result = np.zeros_like(h)
@@ -159,6 +158,7 @@ class RK4Integrator(Integrator):
         # K1 
         k_1 = self.model.forward( x_t_1, u, p=p, tvp=tvp) # (2,2)
         dk1 = self._get_model_jacobian(x_t_1, u, p=p, tvp=tvp) # (2,2,3)
+
         dk1_extended = extend_dim(dk1,u.shape[1], axis=1) # (2,3,3)
         h_k1 = self._get_model_hessian(x_t_1, u, p=p, tvp=tvp)# (2, 2, 3, 3)
         
@@ -170,26 +170,38 @@ class RK4Integrator(Integrator):
         dk2_extended = extend_dim(dk2,u.shape[1], axis=1) # (2,3,3)
         J_local_k2 = self._get_model_jacobian(x_t_1 + k_1*self.DT/2.0, u, p=p, tvp=tvp)# (2,2,3)
         relative_j_k1 = np.eye(3,3) + ((self.DT/2.0) * dk1_extended)# (2,3,3)
-        relative_h_k2 = self._get_model_hessian(x_t_1, u, p=p, tvp=tvp)# (2, 2, 3, 3)
-        h_k2 = dot_right( dot_left(T(relative_j_k1), relative_h_k2),  relative_j_k1) + cross_sum(J_local_k2, h_k1)# (2, 2, 3, 3)
-        
-        model_H = (h_k1 + h_k2)*(self.DT/6.0) #(2,2,3,3)
+        relative_h_k2 = self._get_model_hessian(x_t_1 + k_1*self.DT/2.0, u, p=p, tvp=tvp)# (2, 2, 3, 3)
+        h_k2 = dot_right( dot_left(T(relative_j_k1), relative_h_k2),  relative_j_k1) + (self.DT/2.0)*cross_sum(J_local_k2, h_k1)# (2, 2, 3, 3)
 
+        # K3
+        k_3 = self.model.forward( x_t_1 + k_2*self.DT/2.0, u, p=p, tvp=tvp) 
+        partial_dk3 = self._get_model_jacobian(x_t_1 + k_2*self.DT/2.0, u, p=p, tvp=tvp).reshape(x_t_1.shape[0], x_t_1.shape[1], x_t_1.shape[1]+ u.shape[1])
+        dk3 = np.einsum('ijk,ikl->ijl',partial_dk3,  np.eye(x_t_1.shape[1]+u.shape[1] ,x_t_1.shape[1]+u.shape[1] )+dk2_extended*self.DT/2.0)
+        dk3_extended = extend_dim(dk3,u.shape[1], axis=1) # (2,3,3)
+        J_local_k3 = self._get_model_jacobian(x_t_1 + k_2*self.DT/2.0, u, p=p, tvp=tvp)# (2,2,3)
+        relative_j_k2 = np.eye(3,3) + ((self.DT/2.0) * dk2_extended)# (2,3,3)
+        relative_h_k3 = self._get_model_hessian(x_t_1+ k_2*self.DT/2.0, u, p=p, tvp=tvp)# (2, 2, 3, 3)
+        h_k3 = dot_right( dot_left(T(relative_j_k2), relative_h_k3),  relative_j_k2) + (self.DT/2.0)*cross_sum(J_local_k3, h_k2)# (2, 2, 3, 3)
+        
+        # K4
+        J_local_k4 = self._get_model_jacobian(x_t_1 + k_3*self.DT, u, p=p, tvp=tvp)# (2,2,3)
+        relative_j_k3 = np.eye(3,3) + ((self.DT/1.0) * dk3_extended)# (2,3,3)
+        relative_h_k4 = self._get_model_hessian(x_t_1 + k_3*self.DT, u, p=p, tvp=tvp)# (2, 2, 3, 3)
+        h_k4 = dot_right( dot_left(T(relative_j_k3), relative_h_k4),  relative_j_k3) + (self.DT/1.0)*cross_sum(J_local_k4, h_k3)# (2, 2, 3, 3)
+        
+
+        model_H =(h_k1 + 2*h_k2 + 2*h_k3 + h_k4)*(self.DT/6.0) #(2,2,3,3)
         final_H = np.zeros((self.H, x_t_1.shape[1], (x_t_1.shape[1]+u.shape[1])*self.H, (x_t_1.shape[1]+u.shape[1])*self.H))
-        np.set_printoptions(precision=2)
         offset = x.shape[1]*x.shape[0]
-        print("model_H", dot_right( dot_left(T(relative_j_k1), relative_h_k2),  relative_j_k1))
+
         # DOT PRODUCT ISN'T SYMETRIC
         # x_t x x_t 
         for i in range(1, self.H):
-        #    #print("left : " , final_H[i,:,x.shape[1]*i:x.shape[1]*(i+1), x.shape[1]*i:x.shape[1]*(i+1)].shape)
-        #    #print("right : " , model_H[i, :, :x.shape[1], :x.shape[1]].shape)
             final_H[i,:,x.shape[1]*(i-1):x.shape[1]*i, x.shape[1]*(i-1):x.shape[1]*i] += model_H[i, :, :x.shape[1], :x.shape[1]]
 
         # u_t x u_t
         for i in range( self.H):
             final_H[i, :, offset+i*u.shape[1] :  offset+(i+1)*u.shape[1], offset+i*u.shape[1] :  offset+(i+1)*u.shape[1]] += model_H[i, :, x.shape[1]:, x.shape[1]:]
-        """
         # x_t x u_t       
         for i in range(1, self.H):
             final_H[i, :, x.shape[1]*(i-1):x.shape[1]*i, offset+i*u.shape[1] :  offset+(i+1)*u.shape[1]] += model_H[i, :, :x.shape[1], x.shape[1]:]
@@ -197,8 +209,8 @@ class RK4Integrator(Integrator):
         # u_t x x_t
         for i in range(1, self.H):
             final_H[i, :, offset+i*u.shape[1] :  offset+(i+1)*u.shape[1], x.shape[1]*(i-1):x.shape[1]*i] += model_H[i, :, x.shape[1]:, :x.shape[1]]
-        """
-        print(final_H.reshape(-1,*final_H.shape[2:]))
+
+        #print(final_H.reshape(-1,*final_H.shape[2:]))
         return final_H.reshape(-1,*final_H.shape[2:])
 
     def hessianstructure(self, nb_sample=3):
@@ -219,19 +231,7 @@ class RK4Integrator(Integrator):
             if self.model.tvp_dim > 0:
                 tvp_random = np.random.uniform(size=(self.H, self.model.tvp_dim))
             
-            hessian  = self.hessian(x_random, u_random, x_random[0:1], p=p_random, tvp=tvp_random)
-
-            final_hessian = np.zeros_like(hessian)
-            # x_t x x_t 
-            final_hessian[:,:x_random.shape[1]*(x_random.shape[0]-1), 0:x_random.shape[1]*(x_random.shape[0]-1)] += hessian[:,x_random.shape[1]:x_random.shape[1]*x_random.shape[0], x_random.shape[1]:x_random.shape[1]*x_random.shape[0]]
-            # u_t x u_t
-            final_hessian[:,x_random.shape[1]*x_random.shape[0]:, x_random.shape[1]*x_random.shape[0]:] += hessian[:,x_random.shape[1]*x_random.shape[0]:, x_random.shape[1]*x_random.shape[0]:]
-
-            # x_t x u_t
-            final_hessian[:, :x_random.shape[1]*(x_random.shape[0]-1), x_random.shape[1]*x_random.shape[0]:] += hessian[:,x_random.shape[1]:x_random.shape[1]*x_random.shape[0], x_random.shape[1]*x_random.shape[0]:]
-
-            # u_t x x_t
-            final_hessian[:,x_random.shape[1]*x_random.shape[0]:,  :x_random.shape[1]*(x_random.shape[0]-1) ] += hessian[:,  x_random.shape[1]*x_random.shape[0]:, x_random.shape[1]:x_random.shape[1]*x_random.shape[0] ]
+            final_hessian  = self.hessian(x_random, u_random, x_random[0:1], p=p_random, tvp=tvp_random)
 
             if hessian_map is None:
                 hessian_map = (final_hessian!= 0.0).astype(np.float64)
