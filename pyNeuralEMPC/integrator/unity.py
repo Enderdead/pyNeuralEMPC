@@ -49,8 +49,6 @@ class UnityIntegrator(Integrator):
         x_t_1 =  np.concatenate([x0.reshape(1,-1),x],axis=0)[:-1]
         model_jac = self.model.jacobian(x_t_1, u, p=p, tvp=tvp)  
 
-        print(model_jac.shape)
-        10/0
         # state t - 1 
         J_extended[state_dim:,0:state_dim*(self.H-1)] += model_jac[state_dim:,state_dim:state_dim*self.H]#make_diag_from_2D(model_jac[state_dim:, 0:state_dim])
 

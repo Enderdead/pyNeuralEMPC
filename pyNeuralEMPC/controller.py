@@ -1,5 +1,5 @@
 import numpy as np 
-from .optimizer import Ipopt
+from .optimizer import Ipopt, Optimizer
 from .constraints import DomainConstraint
 
 
@@ -76,4 +76,10 @@ class NMPC():
 
         pb_obj = pb_facto.getProblemInterface()
 
-        return self.optimizer.solve(pb_obj, self.domain_constraint)
+        res =  self.optimizer.solve(pb_obj, self.domain_constraint)
+
+        if res == Optimizer.SUCCESS:
+            return self.optimizer.prev_result[0: self.integrator.model.x_dim*self.integrator.H].reshape(self.integrator.H, -1), self.optimizer.prev_result[self.integrator.model.x_dim*self.integrator.H: ].reshape(self.integrator.H, -1)
+
+        else:
+            return None, None
