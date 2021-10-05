@@ -144,13 +144,13 @@ class Ipopt(Optimizer):
 
 
     def solve(self, problem, domain_constraint):
-        
-        if self.init_with_last_result:
-            #TODO implement this
-            raise NotImplementedError("")
-
         x0 = problem.get_init_value()
-        x_init = np.concatenate( [np.concatenate( [x0,]*problem.integrator.H ), np.repeat(np.array([0.0,]*problem.integrator.model.u_dim),problem.integrator.H)])
+
+        if self.init_with_last_result and not (self.prev_result is None):
+            x_init = self.prev_result
+        else:
+            x_init = np.concatenate( [np.concatenate( [x0,]*problem.integrator.H ), np.repeat(np.array([0.0,]*problem.integrator.model.u_dim),problem.integrator.H)])
+
 
         # TODO find a better way to get the horizon variable
         lb = domain_constraint.get_lower_bounds(problem.integrator.H)
@@ -181,7 +181,10 @@ class Ipopt(Optimizer):
         #nlp.addOption('alpha_for_y',               self.alpha_for_y)
         #nlp.addOption('obj_scaling_factor',        self.obj_scaling_factor)
         #nlp.addOption('nlp_scaling_max_gradient',  self.nlp_scaling_max_gradient)
-            
+        nlp.addOption("tol", 1e-1)
+        nlp.addOption("acceptable_tol",1e-4)
+        nlp.addOption("print_level", 0)
+
 
         x, info = nlp.solve(x_init)
         self.prev_result = x

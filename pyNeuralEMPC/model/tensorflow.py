@@ -204,7 +204,11 @@ class KerasTFModelRollingInput(Model):
     def forward(self, x: np.ndarray, u: np.ndarray, p=None, tvp=None):
         input_net = self._gather_input(x, u, p=p, tvp=tvp)
         input_net_rolled =  rolling_input(input_net, self.x_dim, self.u_dim, rolling_window=self.rolling_window, H=x.shape[0], forward=self.forward_rolling)
-        return self.model.predict(input_net_rolled).numpy()
+        res =  self.model.predict(input_net_rolled)
+        if not isinstance(res, np.ndarray):
+            return res.numpy()
+        return res
+
 
     def jacobian(self, x: np.ndarray, u: np.ndarray, p=None, tvp=None):
         input_net = self._gather_input(x, u, p=p, tvp=tvp)
