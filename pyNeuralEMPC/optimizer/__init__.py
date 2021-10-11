@@ -2,3 +2,4 @@
 
 from pyNeuralEMPC.optimizer.ipopt import Ipopt
 from pyNeuralEMPC.optimizer.base import Optimizer
+from pyNeuralEMPC.optimizer.slsqp import Slsqp

@@ -27,16 +27,12 @@ class IpoptProblem(ProblemInterface):
 
     def objective(self, x):
         # TODO split les dt !!!!
-        start = time.time()
-
         states, u, tvp, p = self._split(x)
         res =  self.objective_func.forward(states, u, p=p, tvp=tvp)
 
         return res
 
     def gradient(self, x):
-        start = time.time()
-
         states, u, tvp, p = self._split(x)
 
         res =  self.objective_func.gradient(states, u, p=p, tvp=tvp)
@@ -44,8 +40,6 @@ class IpoptProblem(ProblemInterface):
         return res
 
     def constraints(self, x):
-        start = time.time()
-
         states, u, tvp, p = self._split(x)
 
         contraints_forward_list = [self.integrator.forward(states, u, self.x0, p=p, tvp=tvp),]
@@ -57,7 +51,6 @@ class IpoptProblem(ProblemInterface):
 
     
     def hessianstructure(self):
-        start = time.time()
         hessian_map_objective = self.objective_func.hessianstructure(  self.integrator.H, self.integrator.model)
 
         hessian_map_integrator = self.integrator.hessianstructure()
@@ -69,8 +62,6 @@ class IpoptProblem(ProblemInterface):
 
     
     def hessian(self, x, lagrange, obj_factor):
-        start = time.time()
-
         states, u, tvp, p = self._split(x)
         
         hessian_matrice = np.zeros((x.shape[0], x.shape[0]))
@@ -89,8 +80,6 @@ class IpoptProblem(ProblemInterface):
         return hessian_matrice[row, col]
 
     def jacobian(self, x):
-        start = time.time()
-
         states, u, tvp, p = self._split(x)
 
         contraints_jacobian_list = [self.integrator.jacobian(states, u, self.x0, p=p, tvp=tvp),]
