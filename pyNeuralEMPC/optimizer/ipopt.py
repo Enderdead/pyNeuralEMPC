@@ -118,7 +118,7 @@ class IpoptProblem(ProblemInterface):
 
 class IpoptProblemFactory(ProblemFactory):
     def _process(self):
-        return IpoptProblem(self.x0, self.objective, self.constraints, self.integrator)
+        return IpoptProblem(self.x0, self.objective, self.constraints, self.integrator, p=self.p, tvp=self.tvp)
 
 
 class Ipopt(Optimizer):

@@ -36,6 +36,8 @@ class ProblemFactory():
     def __init__(self):
 
         self.x0 = None
+        self.p = None
+        self.tvp = None
         self.objective = None 
         self.constraints = None
         self.integrator = None
@@ -62,6 +64,12 @@ class ProblemFactory():
 
     def set_x0(self, x0: np.array):
         self.x0 = x0
+
+    def set_p(self, p: np.array):
+        self.p = p
+
+    def set_tvp(self, tvp: np.ndarray):
+        self.tvp = tvp
 
     def set_objective(self, obj: ObjectiveFunc):
         self.objective = obj

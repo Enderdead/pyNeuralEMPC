@@ -137,10 +137,9 @@ class KerasTFModelRollingInput(Model):
         self.model = model
         self.rolling_window = rolling_window
         self.forward_rolling = forward_rolling
-        self.prev_x, self.prev_u = None, None
-        self.test = None
+        self.prev_x, self.prev_u, self.prev_tvp = None, None, None
 
-    def set_prev_data(self, x_prev: np.ndarray, u_prev: np.ndarray):
+    def set_prev_data(self, x_prev: np.ndarray, u_prev: np.ndarray, tvp_prev=None):
 
         assert x_prev.shape == (self.rolling_window-1, self.x_dim), f"Your x prev tensor must have the following shape {(self.rolling_window-1, self.x_dim)} (received : {x_prev.shape})" 
         assert u_prev.shape == (self.rolling_window-1, self.u_dim), f"Your u prev tensor must have the following shape {(self.rolling_window-1, self.u_dim)} (received : {u_prev.shape})"
@@ -148,28 +147,24 @@ class KerasTFModelRollingInput(Model):
         self.prev_x = x_prev
         self.prev_u = u_prev
 
+        if not tvp_prev is None:
+            assert self.prev_tvp.shape == (self.rolling_window-1, self.tvp_dim), f"Your tvp prev tensor must have the following shape {(self.rolling_window-1, self.tvp_dim)} (received : {tvp_prev.shape})"
+            self.prev_tvp  = tvp_prev  
+
     def _gather_input(self, x: np.ndarray, u: np.ndarray, p=None, tvp=None):
 
         assert (not self.prev_x is None) and (not self.prev_u is None), "You must give history window with set_prev_data before calling any inferance function."
 
         x_extended = np.concatenate([self.prev_x, x], axis=0)
         u_extended = np.concatenate([self.prev_u, u], axis=0)
-        """
-        if self.forward_rolling:
-            x_rolling = np.stack([ x_extended[i:i+self.rolling_window, :].reshape(-1) for i in range(x.shape[0])], axis=0)
-            u_rolling = np.stack([ u_extended[i:i+self.rolling_window, :].reshape(-1) for i in range(x.shape[0])], axis=0)
-        else:
-            x_rolling = np.stack([ (x_extended[i:i+self.rolling_window, :])[::-1,:].reshape(-1) for i in range(x.shape[0])], axis=0)
-            u_rolling = np.stack([ (u_extended[i:i+self.rolling_window, :])[::-1,:].reshape(-1) for i in range(x.shape[0])], axis=0)
-        """
 
         output_np = np.concatenate([x_extended, u_extended], axis=1)
+
         if not tvp is None:
-            raise RuntimeError("tvp isn't supported yet with KerasTFModelRollingInput")
-            output_np = np.concatenate([output_np, tvp], axis=1)
+            tvp_extended = np.concatenate([self.prev_tvp, tvp], axis=0)
+            output_np = np.concatenate([output_np, tvp_extended], axis=1)
+
         if not p is None:
-            raise RuntimeError("p isn't supported yet with KerasTFModelRollingInput")
-            #TODO check this part
             output_np = np.concatenate([output_np, np.array([[p,]*x.shape[0]])], axis=1)
 
         return output_np
@@ -186,19 +181,24 @@ class KerasTFModelRollingInput(Model):
         if self.forward_rolling:
             x_rolling = np.stack([ x_extended[i:i+self.rolling_window, :].reshape(-1) for i in range(x.shape[0])], axis=0)
             u_rolling = np.stack([ u_extended[i:i+self.rolling_window, :].reshape(-1) for i in range(x.shape[0])], axis=0)
+            if not tvp is None:
+                assert (not self.prev_tvp is None), "You must give history window with set_prev_data before calling any inferance function."
+                tvp_extended = np.concatenate([self.prev_tvp, tvp], axis=0)
+                tvp_rolling = np.stack([ tvp_extended[i:i+self.rolling_window, :].reshape(-1) for i in range(x.shape[0])], axis=0)
         else:
             x_rolling = np.stack([ (x_extended[i:i+self.rolling_window, :])[::-1,:].reshape(-1) for i in range(x.shape[0])], axis=0)
             u_rolling = np.stack([ (u_extended[i:i+self.rolling_window, :])[::-1,:].reshape(-1) for i in range(x.shape[0])], axis=0)
+            if not tvp is None:
+                assert (not self.prev_tvp is None), "You must give history window with set_prev_data before calling any inferance function."
+                tvp_extended = np.concatenate([self.prev_tvp, tvp], axis=0)
+                tvp_rolling = np.stack([ (tvp_extended[i:i+self.rolling_window, :])[::-1,:].reshape(-1) for i in range(x.shape[0])], axis=0)
 
         output_np = np.concatenate([x_rolling, u_rolling], axis=1)
-        if not tvp is None:
-            raise RuntimeError("tvp isn't supported yet with KerasTFModelRollingInput")
-            output_np = np.concatenate([output_np, tvp], axis=1)
-        if not p is None:
-            raise RuntimeError("p isn't supported yet with KerasTFModelRollingInput")
-            #TODO check this part
-            output_np = np.concatenate([output_np, np.array([[p,]*x.shape[0]])], axis=1)
 
+        if not tvp is None:
+            output_np = np.concatenate([output_np, tvp_rolling], axis=1)
+        if not p is None:
+            output_np = np.concatenate([output_np, np.array([[p,]*x.shape[0]])], axis=1)
         return output_np
 
     def forward(self, x: np.ndarray, u: np.ndarray, p=None, tvp=None):
