@@ -130,6 +130,6 @@ class Slsqp(Optimizer):
 
         if not res.success :
             warnings.warn("Process do not converge ! ")
-            assert np.max(self.prev_result)<1e-4, "Result not compliant ! "
+            assert np.max(problem.constraints(self.prev_result))<1e-5, "Result not compliant ! "
 
         return Optimizer.SUCCESS
