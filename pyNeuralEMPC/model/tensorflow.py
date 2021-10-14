@@ -139,6 +139,9 @@ class KerasTFModelRollingInput(Model):
         self.forward_rolling = forward_rolling
         self.prev_x, self.prev_u, self.prev_tvp = None, None, None
 
+
+        self.jacobian_proj = None
+
     def set_prev_data(self, x_prev: np.ndarray, u_prev: np.ndarray, tvp_prev=None):
 
         assert x_prev.shape == (self.rolling_window-1, self.x_dim), f"Your x prev tensor must have the following shape {(self.rolling_window-1, self.x_dim)} (received : {x_prev.shape})" 
@@ -215,12 +218,21 @@ class KerasTFModelRollingInput(Model):
 
         input_tf = tf.constant(input_net)
 
+        if self.jacobian_proj is None:
+            with tf.GradientTape(persistent=False) as tx:
+                tx.watch(input_tf)
+                input_tf_rolled =  rolling_input(input_tf, self.x_dim, self.u_dim, rolling_window=self.rolling_window, H=x.shape[0], forward=self.forward_rolling)
+            self.jacobian_proj = tx.jacobian(input_tf_rolled, input_tf)
+        else:
+            input_tf_rolled =  rolling_input(input_tf, self.x_dim, self.u_dim, rolling_window=self.rolling_window, H=x.shape[0], forward=self.forward_rolling)  
+
         with tf.GradientTape(persistent=False) as tx:
-            tx.watch(input_tf)
-            input_tf_rolled =  rolling_input(input_tf, self.x_dim, self.u_dim, rolling_window=self.rolling_window, H=x.shape[0], forward=self.forward_rolling)
+            tx.watch(input_tf_rolled)
             output_tf = self.model(input_tf_rolled)
+        pre_jac_tf = tx.jacobian(output_tf, input_tf_rolled)
         
-        jacobian_tf = tx.jacobian(output_tf, input_tf)
+        jacobian_tf = tf.einsum("abcd,cdef->abef", pre_jac_tf, self.jacobian_proj)
+
         jacobian_np = jacobian_tf.numpy().reshape(x.shape[0]*self.x_dim, (self.x_dim+self.u_dim)*(x.shape[0]+self.rolling_window-1))
         reshape_indexer = sum([ list(np.arange(x.shape[1])+i*(x.shape[1]+u.shape[1])) for i in range(self.rolling_window-1 ,x.shape[0]+self.rolling_window-1)  ], list()) + \
              sum([ list( x.shape[1]+np.arange(u.shape[1])+i*(x.shape[1]+u.shape[1])) for i in range(self.rolling_window-1  ,x.shape[0]+self.rolling_window-1)  ], list())
@@ -229,7 +241,25 @@ class KerasTFModelRollingInput(Model):
 
         return jacobian_np
     
+    def jacobian_old(self, x: np.ndarray, u: np.ndarray, p=None, tvp=None):
+        input_net = self._gather_input(x, u, p=p, tvp=tvp)
 
+        input_tf = tf.constant(input_net)
+
+        with tf.GradientTape(persistent=False) as tx:
+            tx.watch(input_tf)
+            input_tf_rolled =  rolling_input(input_tf, self.x_dim, self.u_dim, rolling_window=self.rolling_window, H=x.shape[0], forward=self.forward_rolling)
+            output_tf = self.model(input_tf_rolled)
+        
+        jacobian_tf = tx.jacobian(output_tf, input_tf)
+
+        jacobian_np = jacobian_tf.numpy().reshape(x.shape[0]*self.x_dim, (self.x_dim+self.u_dim)*(x.shape[0]+self.rolling_window-1))
+        reshape_indexer = sum([ list(np.arange(x.shape[1])+i*(x.shape[1]+u.shape[1])) for i in range(self.rolling_window-1 ,x.shape[0]+self.rolling_window-1)  ], list()) + \
+             sum([ list( x.shape[1]+np.arange(u.shape[1])+i*(x.shape[1]+u.shape[1])) for i in range(self.rolling_window-1  ,x.shape[0]+self.rolling_window-1)  ], list())
+
+        jacobian_np = np.take(jacobian_np, reshape_indexer, axis=1)
+
+        return jacobian_np
 
     @tf.function
     def _hessian_compute(self, input_tf):
