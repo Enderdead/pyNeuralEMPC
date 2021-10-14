@@ -20,7 +20,7 @@ class Integrator():
         self.model = model
         self.nb_contraints = nb_contraints
 
-        self.hessian_structure_cache = self._compute_hessianstructure()
+        self.hessian_structure_cache = None
 
     def get_dim(self) -> float:
         """Return the number of constraint generated.
@@ -81,6 +81,8 @@ class Integrator():
     
 
     def hessianstructure(self):
+        if self.hessian_structure_cache is None:
+            self.hessian_structure_cache = self._compute_hessianstructure()
         return self.hessian_structure_cache
 
 
