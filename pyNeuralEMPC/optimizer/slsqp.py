@@ -123,12 +123,13 @@ class Slsqp(Optimizer):
 
         
         res = minimize(problem.objective, x_init, method="SLSQP", jac=problem.gradient, \
-            constraints=problem.get_constraints_dict(), options={'maxiter': self.max_iteration, 'ftol': 0.5e-6, 'disp': True, 'iprint':self.verbose}, bounds=bounds)
+            constraints=problem.get_constraints_dict(), options={'maxiter': self.max_iteration, 'ftol': self.tolerance, 'disp': True, 'iprint':self.verbose}, bounds=bounds)
 
         self.prev_result = res.x
 
 
         if not res.success :
             warnings.warn("Process do not converge ! ")
+            assert np.max(self.prev_result)<1e-4, "Result not compliant ! "
 
         return Optimizer.SUCCESS
