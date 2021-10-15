@@ -140,8 +140,8 @@ class Ipopt(Optimizer):
             u_dim = problem.integrator.model.u_dim
             x_init = np.concatenate([self.prev_result[x_dim:x_dim*problem.integrator.H], # x[1]-x[H]
               self.prev_result[x_dim*(problem.integrator.H-1):x_dim*problem.integrator.H], # x[H]
-              self.prev_result[x_dim*problem.integrator.H:u_dim*problem.integrator.H],  # u[1] - u[H]
-              self.prev_result[u_dim*(problem.integrator.H-1):u_dim*problem.integrator.H] ], axis=0) # u[H]
+              self.prev_result[x_dim*problem.integrator.H+u_dim:(x_dim+u_dim)*problem.integrator.H],  # u[1] - u[H]
+              self.prev_result[x_dim*problem.integrator.H+u_dim*(problem.integrator.H-1):x_dim*problem.integrator.H+u_dim*problem.integrator.H] ], axis=0) # u[H]
         else:
             x_init = np.concatenate( [np.concatenate( [x0,]*problem.integrator.H ), np.repeat(np.array([0.0,]*problem.integrator.model.u_dim),problem.integrator.H)])
 
