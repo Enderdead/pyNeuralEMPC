@@ -129,15 +129,15 @@ class Slsqp(Optimizer):
         if not res.success :
             warnings.warn("Process do not converge ! ")
 
-            if np.max(problem.constraints(self.prev_result))>1e-5:
+            if np.max(problem.constraints(res.x))>1e-5:
                 for _ in range(self.nb_max_try):
                     print("RETRY SQP optimization")
                     res = minimize(problem.objective, res.x, method="SLSQP", jac=problem.gradient, \
                         constraints=problem.get_constraints_dict(), options={'maxiter': self.retry_max_iter, 'ftol': self.tolerance, 'disp': True, 'iprint':self.verbose}, bounds=bounds)
-                    if np.max(problem.constraints(self.prev_result))<1e-5:
+                    if np.max(problem.constraints(res.x))<1e-5:
                         break
 
-            assert np.max(problem.constraints(self.prev_result))<1e-5, "Result not compliant ! "
+            assert np.max(problem.constraints(res.x))<1e-5, "Result not compliant ! "
 
         self.prev_result = res.x
 
