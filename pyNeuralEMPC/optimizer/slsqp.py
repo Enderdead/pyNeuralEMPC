@@ -135,11 +135,11 @@ class Slsqp(Optimizer):
             warnings.warn("Process do not converge ! ")
 
             if np.max(problem.constraints(res.x))>1e-5:
-                for _ in range(self.nb_max_try):
+                for i in range(self.nb_max_try):
                     print("RETRY SQP optimization")
                     x_init = np.concatenate( [np.concatenate( [x0,]*problem.integrator.H ), np.repeat(np.array([0.0,]*problem.integrator.model.u_dim),problem.integrator.H)])
                     res = minimize(problem.objective, x_init, method="SLSQP", jac=problem.gradient, \
-                        constraints=problem.get_constraints_dict(), options={'maxiter': self.max_iteration, 'ftol': self.tolerance, 'disp': True, 'iprint':self.verbose}, bounds=bounds)
+                        constraints=problem.get_constraints_dict(), options={'maxiter': self.max_iteration, 'ftol': self.tolerance*(2.0**i), 'disp': True, 'iprint':self.verbose}, bounds=bounds)
                     if np.max(problem.constraints(res.x))<1e-5:
                         break
 
