@@ -140,10 +140,10 @@ class Slsqp(Optimizer):
                     x_init = np.concatenate( [np.concatenate( [x0,]*problem.integrator.H ), np.repeat(np.array([0.0,]*problem.integrator.model.u_dim),problem.integrator.H)])
                     res = minimize(problem.objective, x_init, method="SLSQP", jac=problem.gradient, \
                         constraints=problem.get_constraints_dict(), options={'maxiter': self.max_iteration, 'ftol': self.tolerance*(2.0**i), 'disp': True, 'iprint':self.verbose}, bounds=bounds)
-                    if np.max(problem.constraints(res.x))<1e-5:
+                    if np.max(problem.constraints(res.x))<1e-5  or res.sucess:
                         break
 
-            assert np.max(problem.constraints(res.x))<1e-5, "Result not compliant ! "
+            assert (not res.sucess) and (np.max(problem.constraints(res.x))<1e-5), "Result not compliant ! "
 
         self.prev_result = res.x
 
