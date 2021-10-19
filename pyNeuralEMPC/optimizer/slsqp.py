@@ -16,6 +16,8 @@ class SlsqpProblem(ProblemInterface):
         self.H = self.integrator.H
         self.p = p
         self.tvp = tvp
+        self.debug_mode = False
+        self.debug_x, self.debug_u = list(), list()
 
     def _split(self, x):
         prev_idx = 0
@@ -29,6 +31,9 @@ class SlsqpProblem(ProblemInterface):
 
     def objective(self, x):
         states, u, tvp, p = self._split(x)
+        if self.debug_mode:
+            self.debug_x.append(states.copy())
+            self.debug_u.append(u.copy())
         res =  self.objective_func.forward(states, u, p=p, tvp=tvp)
 
         return res
@@ -39,6 +44,9 @@ class SlsqpProblem(ProblemInterface):
         res =  self.objective_func.gradient(states, u, p=p, tvp=tvp)
 
         return res
+
+    def set_debug(self, debug_mode):
+        self.debug_mode = debug_mode
 
     def constraints(self, x, eq=True):
         # TODO not taking into account other constraint than integrator ones      
@@ -91,7 +99,7 @@ class SlsqpProblemFactory(ProblemFactory):
 
 
 class Slsqp(Optimizer):
-    def __init__(self, max_iteration=200, tolerance=0.5e-6, verbose=1, init_with_last_result=False, nb_max_try=15):
+    def __init__(self, max_iteration=200, tolerance=0.5e-6, verbose=1, init_with_last_result=False, nb_max_try=15, debug=False):
 
         super(Slsqp, self).__init__()
 
@@ -102,7 +110,7 @@ class Slsqp(Optimizer):
 
         self.prev_result = None
         self.nb_max_try = nb_max_try
-        self.retry_max_iter = 15
+        self.debug = debug
 
     def get_factory(self):
         return SlsqpProblemFactory()
@@ -110,7 +118,7 @@ class Slsqp(Optimizer):
 
     def solve(self, problem, domain_constraint):
         x0 = problem.get_init_value()
-
+        problem.set_debug(self.debug)
         if self.init_with_last_result and not (self.prev_result is None):
             x_dim = problem.integrator.model.x_dim
             u_dim = problem.integrator.model.u_dim
@@ -130,9 +138,15 @@ class Slsqp(Optimizer):
         
         res = minimize(problem.objective, x_init, method="SLSQP", jac=problem.gradient, \
             constraints=problem.get_constraints_dict(), options={'maxiter': self.max_iteration, 'ftol': self.tolerance, 'disp': True, 'iprint':self.verbose}, bounds=bounds)
-
+        if self.debug:
+            self.constraints_val = problem.constraints(res.x)
+            self.debug_x = problem.debug_x
+            self.debug_u = problem.debug_u
         if not res.success :
             warnings.warn("Process do not converge ! ")
+
+            if self.debug:
+                return Optimizer.FAIL
 
             if np.max(problem.constraints(res.x))>1e-5:
                 for i in range(self.nb_max_try):
@@ -140,10 +154,10 @@ class Slsqp(Optimizer):
                     x_init = np.concatenate( [np.concatenate( [x0,]*problem.integrator.H ), np.repeat(np.array([0.0,]*problem.integrator.model.u_dim),problem.integrator.H)])
                     res = minimize(problem.objective, x_init, method="SLSQP", jac=problem.gradient, \
                         constraints=problem.get_constraints_dict(), options={'maxiter': self.max_iteration, 'ftol': self.tolerance*(2.0**i), 'disp': True, 'iprint':self.verbose}, bounds=bounds)
-                    if np.max(problem.constraints(res.x))<1e-5  or res.sucess:
+                    if np.max(problem.constraints(res.x))<1e-5  or res.success:
                         break
 
-            assert (not res.sucess) and (np.max(problem.constraints(res.x))<1e-5), "Result not compliant ! "
+            assert res.success or (np.max(problem.constraints(res.x))<1e-5), "Result not compliant ! "
 
         self.prev_result = res.x
 
