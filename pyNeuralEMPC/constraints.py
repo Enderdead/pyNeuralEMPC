@@ -32,5 +32,7 @@ class DomainConstraint:
 class RelationConstraint:
     """
     This class will implement a constraint under a formula declaration for a given state. 
+
+    TODO add a mecanism to filter if it's an eq or ineq
     """
     pass
