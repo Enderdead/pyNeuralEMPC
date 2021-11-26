@@ -148,7 +148,7 @@ class KerasTFModelRollingInput(Model):
         self.prev_u = u_prev
 
         if not tvp_prev is None:
-            assert self.prev_tvp.shape == (self.rolling_window-1, self.tvp_dim), f"Your tvp prev tensor must have the following shape {(self.rolling_window-1, self.tvp_dim)} (received : {tvp_prev.shape})"
+            assert tvp_prev.shape == (self.rolling_window-1, self.tvp_dim), f"Your tvp prev tensor must have the following shape {(self.rolling_window-1, self.tvp_dim)} (received : {tvp_prev.shape})"
             self.prev_tvp  = tvp_prev  
 
     def _gather_input(self, x: np.ndarray, u: np.ndarray, p=None, tvp=None):
