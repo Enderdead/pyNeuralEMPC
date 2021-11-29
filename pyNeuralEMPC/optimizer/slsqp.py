@@ -145,8 +145,8 @@ class Slsqp(Optimizer):
         if not res.success :
             warnings.warn("Process do not converge ! ")
 
-            if self.debug:
-                return Optimizer.FAIL
+            #if self.debug:
+            #    return Optimizer.FAIL
 
             if np.max(problem.constraints(res.x))>1e-5:
                 for i in range(self.nb_max_try):
