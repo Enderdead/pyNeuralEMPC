@@ -1,10 +1,11 @@
 import warnings
-from .base import Optimizer, ProblemFactory, ProblemInterface
+from .base import Optimizer, ProblemFactory, ProblemInterface, Constraint
 
 import numpy as np 
 from scipy.optimize import minimize, Bounds
 from functools import lru_cache
 import time
+
 
 class SlsqpProblem(ProblemInterface):
     def __init__(self, x0, objective_func, constraints, integrator, p=None, tvp=None):
@@ -53,10 +54,18 @@ class SlsqpProblem(ProblemInterface):
         warnings.warn("Not taking into account other constraint than integrator ones  !")  
         states, u, tvp, p = self._split(x)
 
-        contraints_forward_list = [self.integrator.forward(states, u, self.x0, p=p, tvp=tvp),]
+        contraints_forward_list = [self.integrator.forward(states, u, self.x0, p=p, tvp=tvp),] if eq else []
 
-        #for ctr in self.constraints_list:
-        #    contraints_forward_list.append(ctr.forward(states, u, p=p, tvp=tvp))
+        for ctr in self.constraints_list:
+            if eq and (ctr.get_type() == Constraint.EQ_TYPE):
+                contraints_forward_list.append(ctr.forward(states, u, p=p, tvp=tvp))
+            elif not eq and (ctr.get_type() == Constraint.INEQ_TYPE):
+                contraints_forward_list.append(ctr.forward(states, u, p=p, tvp=tvp))
+            elif not eq and (ctr.get_type() == Constraint.INTER_TYPE):
+                contraints_forward_list.append(ctr.forward(states, u, p=p, tvp=tvp)-ctr.get_lower_bound())
+                contraints_forward_list.append(-ctr.forward(states, u, p=p, tvp=tvp)+ctr.get_upper_bound())
+            else:
+                raise NotImplementedError("")
 
         return np.concatenate(contraints_forward_list, axis=0)
 
@@ -73,18 +82,29 @@ class SlsqpProblem(ProblemInterface):
         warnings.warn("Not taking into account other constraint than integrator ones  !")
         states, u, tvp, p = self._split(x)
 
-        contraints_jacobian_list = [self.integrator.jacobian(states, u, self.x0, p=p, tvp=tvp),]
+        contraints_jacobian_list = [self.integrator.jacobian(states, u, self.x0, p=p, tvp=tvp),] if eq else []
 
         for ctr in self.constraints_list:
-            contraints_jacobian_list.append(ctr.jacobian(states, u, p=p, tvp=tvp))
+            if eq and (ctr.get_type() == Constraint.EQ_TYPE):
+                contraints_jacobian_list.append(ctr.jacobian(states, u, p=p, tvp=tvp))
+            elif not eq and (ctr.get_type() == Constraint.INEQ_TYPE):
+                contraints_jacobian_list.append(ctr.jacobian(states, u, p=p, tvp=tvp))
+            elif not eq:
+                contraints_jacobian_list.append(ctr.jacobian(states, u, p=p, tvp=tvp))
+                contraints_jacobian_list.append(-ctr.jacobian(states, u, p=p, tvp=tvp))
+            else:
+                raise NotImplementedError("")
 
         return np.concatenate(contraints_jacobian_list, axis=0)
 
     def get_constraints_dict(self):
         # TODO not taking into account other constraint than integrator ones        
         return [{'type': 'eq',
-           'fun' : lambda x: self.constraints(x),
-           'jac' : lambda x: self.jacobian(x)}]
+           'fun' : lambda x: self.constraints(x, eq=True),
+           'jac' : lambda x: self.jacobian(x, eq=True)},
+           {'type': 'ineq',
+           'fun' : lambda x: self.constraints(x, eq=False),
+           'jac' : lambda x: self.jacobian(x, eq=False)}]
 
 
     def get_init_value(self):
@@ -156,8 +176,9 @@ class Slsqp(Optimizer):
                         constraints=problem.get_constraints_dict(), options={'maxiter': self.max_iteration, 'ftol': self.tolerance*(2.0**i), 'disp': True, 'iprint':self.verbose}, bounds=bounds)
                     if np.max(problem.constraints(res.x))<1e-5  or res.success:
                         break
-
-            assert res.success or (np.max(problem.constraints(res.x))<1e-5), "Result not compliant ! "
+                    
+            if not res.success and (np.max(problem.constraints(res.x))>1e-5):
+                return Optimizer.FAIL
 
         self.prev_result = res.x
 
