@@ -1,21 +1,24 @@
 import numpy as np 
 from .optimizer import Ipopt, Optimizer
 from .constraints import DomainConstraint
-
+from .parameterisation import ControlParam
 
 
 class NMPC():
-    def __init__(self, integrator, objective_func, constraint_list, H, DT, optimizer=Ipopt(), use_hessian=True):
+    def __init__(self, integrator, objective_func, constraint_list, H, DT, optimizer=Ipopt(), use_hessian=True, u_parametrisation=None):
 
         self.integrator = integrator
         self.objective_func = objective_func
         self.constraint_list = constraint_list
-        self.domain_constraint = list(filter(lambda x: isinstance(x, DomainConstraint), constraint_list))[0]
+        self.domain_constraint = list(filter(lambda x: isinstance(x, DomainConstraint) or issubclass(x.__class__, DomainConstraint), constraint_list))[0]
         self.constraint_list.remove(self.domain_constraint)
         self.H = H
         self.DT = DT 
         self.optimizer = optimizer
         self.use_hessian = use_hessian
+        self.u_parametrisation = u_parametrisation
+        if not (self.u_parametrisation is None):
+            assert self.u_parametrisation.u_dim == self.integrator.model.u_dim, "Wrong u dim for control parametrisation !"
 
 
         # TODO VERIF EVERY THINGS !
@@ -46,11 +49,13 @@ class NMPC():
 
         pb_facto.set_constraints(self.constraint_list)
 
+        pb_facto.set_u_param(self.u_parametrisation)
+
         pb_obj = pb_facto.getProblemInterface()
 
         return pb_obj
 
-    def next(self, x0: np.array, p=None, tvp=None):
+    def next(self, x0: np.array, p=None, tvp=None, x_init=None):
         
         # first check x0, p and tvp dim and look if the model need it !
         assert len(x0.shape) == 1, "x0 must be a vector"
@@ -75,9 +80,11 @@ class NMPC():
 
         pb_facto.set_constraints(self.constraint_list)
 
+        pb_facto.set_u_param(self.u_parametrisation)
+
         pb_obj = pb_facto.getProblemInterface()
 
-        res =  self.optimizer.solve(pb_obj, self.domain_constraint)
+        res =  self.optimizer.solve(pb_obj, self.domain_constraint, x_init)
 
         if res == Optimizer.SUCCESS:
             return self.optimizer.prev_result[0: self.integrator.model.x_dim*self.integrator.H].reshape(self.integrator.H, -1), self.optimizer.prev_result[self.integrator.model.x_dim*self.integrator.H: ].reshape(self.integrator.H, -1)

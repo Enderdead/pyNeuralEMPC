@@ -41,6 +41,7 @@ class ProblemFactory():
         self.objective = None 
         self.constraints = None
         self.integrator = None
+        self.u_param = None
 
     def getProblemInterface(self) -> ProblemInterface:
         if (not self.x0 is None) and \
@@ -77,6 +78,10 @@ class ProblemFactory():
     def set_constraints(self, ctrs: list):
         self.constraints = ctrs
 
+    def set_u_param(self, u_param: list):
+        self.u_param = u_param
+
+
     def _process(self):
         raise NotImplementedError("")
 
@@ -93,7 +98,7 @@ class Optimizer:
         Return the solver associeted factory.
         """
 
-    def solve(self, problem: ProblemInterface, domain_constraint: DomainConstraint) -> np.ndarray:
+    def solve(self, problem: ProblemInterface, domain_constraint: DomainConstraint, x_init=None) -> np.ndarray:
         """Solve the problem
 
 

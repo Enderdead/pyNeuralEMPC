@@ -5,7 +5,7 @@ import cyipopt
 import time
 
 class IpoptProblem(ProblemInterface):
-    def __init__(self, x0, objective_func, constraints, integrator, p=None, tvp=None):
+    def __init__(self, x0, objective_func, constraints, integrator, p=None, tvp=None, u_param=None):
         self.x0 = x0
         self.objective_func = objective_func 
         self.constraints_list = constraints
@@ -14,6 +14,8 @@ class IpoptProblem(ProblemInterface):
         self.H = self.integrator.H
         self.p = p
         self.tvp = tvp
+
+        assert u_param is None, "Control parametrisation isn't supported with Ipopt solver !"
 
     def _split(self, x):
         prev_idx = 0
@@ -107,7 +109,7 @@ class IpoptProblem(ProblemInterface):
 
 class IpoptProblemFactory(ProblemFactory):
     def _process(self):
-        return IpoptProblem(self.x0, self.objective, self.constraints, self.integrator, p=self.p, tvp=self.tvp)
+        return IpoptProblem(self.x0, self.objective, self.constraints, self.integrator, p=self.p, tvp=self.tvp, u_param=None)
 
 
 class Ipopt(Optimizer):
@@ -132,16 +134,18 @@ class Ipopt(Optimizer):
         return IpoptProblemFactory()
 
 
-    def solve(self, problem, domain_constraint):
+    def solve(self, problem, domain_constraint, x_init=None):
         x0 = problem.get_init_value()
 
-        if self.init_with_last_result and not (self.prev_result is None):
+        if self.init_with_last_result and not (self.prev_result is None) and x_init is None:
             x_dim = problem.integrator.model.x_dim
             u_dim = problem.integrator.model.u_dim
             x_init = np.concatenate([self.prev_result[x_dim:x_dim*problem.integrator.H], # x[1]-x[H]
               self.prev_result[x_dim*(problem.integrator.H-1):x_dim*problem.integrator.H], # x[H]
               self.prev_result[x_dim*problem.integrator.H+u_dim:(x_dim+u_dim)*problem.integrator.H],  # u[1] - u[H]
               self.prev_result[x_dim*problem.integrator.H+u_dim*(problem.integrator.H-1):x_dim*problem.integrator.H+u_dim*problem.integrator.H] ], axis=0) # u[H]
+        elif not x_init is None:
+            x_init = x_init
         else:
             x_init = np.concatenate( [np.concatenate( [x0,]*problem.integrator.H ), np.repeat(np.array([0.0,]*problem.integrator.model.u_dim),problem.integrator.H)])
 

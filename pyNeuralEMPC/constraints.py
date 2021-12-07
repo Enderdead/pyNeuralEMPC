@@ -48,6 +48,9 @@ class Constraint:
     def jacobian(self, x, u, p=None, tvp=None):
         pass
 
+    def use_u_param(self):
+        raise NotImplementedError()
+
     def get_lower_bounds(self):
         raise NotImplementedError()
 
@@ -74,10 +77,10 @@ class EqualityConstraint(Constraint):
         raise NotImplementedError()
     
     def get_lower_bounds(self):
-        return np.zeros(len(self.get_dim()))
+        return np.zeros(self.get_dim())
 
     def get_upper_bounds(self):
-        return np.zeros(len(self.get_dim()))
+        return np.zeros(self.get_dim())
 
 class InequalityConstraint(Constraint):
     def forward(self, x, u, p=None, tvp=None):
@@ -90,8 +93,8 @@ class InequalityConstraint(Constraint):
         raise NotImplementedError()
     
     def get_lower_bounds(self):
-        return np.zeros(len(self.get_dim()))
+        return np.zeros(self.get_dim())
 
     def get_upper_bounds(self):
-        return np.ones(len(self.get_dim()))*np.inf
+        return np.ones(self.get_dim())*np.inf
 
