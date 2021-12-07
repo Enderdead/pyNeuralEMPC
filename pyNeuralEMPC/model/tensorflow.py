@@ -1,6 +1,6 @@
 import tensorflow as tf 
 import numpy as np  
-
+from copy import copy
 from .base import Model
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
@@ -27,6 +27,14 @@ class KerasTFModel(Model):
 
         self.model = model
         self.test = None
+
+    def __getstate__(self):
+        result_dict = copy(self.__dict__)
+        result_dict["model"] = None
+        return result_dict
+
+    def __setstate__(self, d):
+        self.__dict__ = d
 
     def _gather_input(self, x: np.ndarray, u: np.ndarray, p=None, tvp=None):
         output_np = np.concatenate([x, u], axis=1)
@@ -141,6 +149,18 @@ class KerasTFModelRollingInput(Model):
 
 
         self.jacobian_proj = None
+
+    def __getstate__(self):
+        result_dict = copy(self.__dict__)
+        result_dict["prev_x"] = None
+        result_dict["prev_u"] = None
+        result_dict["model"] = None
+        result_dict["prev_tvp"] = None      
+
+        return result_dict
+
+    def __setstate__(self, d):
+        self.__dict__ = d
 
     def set_prev_data(self, x_prev: np.ndarray, u_prev: np.ndarray, tvp_prev=None):
 
