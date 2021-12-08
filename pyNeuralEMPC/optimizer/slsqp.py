@@ -1,6 +1,6 @@
 import warnings
-from .base import Optimizer, ProblemFactory, ProblemInterface, Constraint
-
+from .base import Optimizer, ProblemFactory, ProblemInterface
+from ..constraints import Constraint
 import numpy as np 
 from scipy.optimize import minimize, Bounds
 from functools import lru_cache
@@ -57,15 +57,15 @@ class SlsqpProblem(ProblemInterface):
         contraints_forward_list = [self.integrator.forward(states, u, self.x0, p=p, tvp=tvp),] if eq else []
 
         for ctr in self.constraints_list:
-            if eq and (ctr.get_type() == Constraint.EQ_TYPE):
+            if eq and (ctr.get_type(self.H) == Constraint.EQ_TYPE):
                 contraints_forward_list.append(ctr.forward(states, u, p=p, tvp=tvp))
-            elif not eq and (ctr.get_type() == Constraint.INEQ_TYPE):
+            elif not eq and (ctr.get_type(self.H) == Constraint.INEQ_TYPE):
                 contraints_forward_list.append(ctr.forward(states, u, p=p, tvp=tvp))
-            elif not eq and (ctr.get_type() == Constraint.INTER_TYPE):
-                contraints_forward_list.append(ctr.forward(states, u, p=p, tvp=tvp)-ctr.get_lower_bound())
-                contraints_forward_list.append(-ctr.forward(states, u, p=p, tvp=tvp)+ctr.get_upper_bound())
+            elif not eq and (ctr.get_type(self.H) == Constraint.INTER_TYPE):
+                contraints_forward_list.append(ctr.forward(states, u, p=p, tvp=tvp)-ctr.get_lower_bound(self.H))
+                contraints_forward_list.append(-ctr.forward(states, u, p=p, tvp=tvp)+ctr.get_upper_bound(self.H))
             else:
-                raise NotImplementedError("")
+                pass
 
         return np.concatenate(contraints_forward_list, axis=0)
 
@@ -85,26 +85,27 @@ class SlsqpProblem(ProblemInterface):
         contraints_jacobian_list = [self.integrator.jacobian(states, u, self.x0, p=p, tvp=tvp),] if eq else []
 
         for ctr in self.constraints_list:
-            if eq and (ctr.get_type() == Constraint.EQ_TYPE):
+            if eq and (ctr.get_type(self.H) == Constraint.EQ_TYPE):
                 contraints_jacobian_list.append(ctr.jacobian(states, u, p=p, tvp=tvp))
-            elif not eq and (ctr.get_type() == Constraint.INEQ_TYPE):
+            elif not eq and (ctr.get_type(self.H) == Constraint.INEQ_TYPE):
                 contraints_jacobian_list.append(ctr.jacobian(states, u, p=p, tvp=tvp))
             elif not eq:
                 contraints_jacobian_list.append(ctr.jacobian(states, u, p=p, tvp=tvp))
                 contraints_jacobian_list.append(-ctr.jacobian(states, u, p=p, tvp=tvp))
             else:
-                raise NotImplementedError("")
+                pass
 
         return np.concatenate(contraints_jacobian_list, axis=0)
 
     def get_constraints_dict(self):
-        # TODO not taking into account other constraint than integrator ones        
-        return [{'type': 'eq',
+        result =  [{'type': 'eq',
            'fun' : lambda x: self.constraints(x, eq=True),
-           'jac' : lambda x: self.jacobian(x, eq=True)},
-           {'type': 'ineq',
+           'jac' : lambda x: self.jacobian(x, eq=True)},]
+        if len(list(filter(lambda element : element.get_type(self.H) in [Constraint.INEQ_TYPE, Constraint.INTER_TYPE], self.constraints_list)))>0:
+            result.append({'type': 'ineq',
            'fun' : lambda x: self.constraints(x, eq=False),
-           'jac' : lambda x: self.jacobian(x, eq=False)}]
+           'jac' : lambda x: self.jacobian(x, eq=False)})
+        return result
 
 
     def get_init_value(self):

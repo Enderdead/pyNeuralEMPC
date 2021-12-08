@@ -96,13 +96,13 @@ class IpoptProblem(ProblemInterface):
         #TODO refaire 
         #return self.integrator.get_lower_bounds()
         #ajouter integrator
-        return sum([ [  ctr.get_lower_bounds() for ctr in [self.integrator,]+self.constraints_list  ]], list())
+        return sum([ [  ctr.get_lower_bounds(self.H) for ctr in [self.integrator,]+self.constraints_list  ]], list())
 
     def get_constraint_upper_bounds(self):
         #TODO refaire 
         #return self.integrator.get_upper_bounds()
 
-        return sum([ [  ctr.get_upper_bounds() for ctr in [self.integrator,]+self.constraints_list  ]], list())
+        return sum([ [  ctr.get_upper_bounds(self.H) for ctr in [self.integrator,]+self.constraints_list  ]], list())
 
 
 class IpoptProblemFactory(ProblemFactory):

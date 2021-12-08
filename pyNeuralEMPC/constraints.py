@@ -48,16 +48,16 @@ class Constraint:
     def jacobian(self, x, u, p=None, tvp=None):
         pass
 
-    def get_lower_bounds(self):
+    def get_lower_bounds(self, H):
         raise NotImplementedError()
 
-    def get_upper_bounds(self):
+    def get_upper_bounds(self, H):
         raise NotImplementedError()
 
-    def get_type(self):
-        if self.get_upper_bounds() == self.get_lower_bounds() == 0 :
+    def get_type(self, H=None):
+        if (self.get_upper_bounds(H) == self.get_lower_bounds(H)).all() and (self.get_lower_bounds(H) == 0).all() :
             return Constraint.EQ_TYPE
-        if (self.get_upper_bounds() is np.inf) and (self.get_lower_bounds() == 0):
+        if (self.get_upper_bounds(H) == np.inf).all() and (self.get_lower_bounds(H) == 0).all():
             return Constraint.INEQ_TYPE
         else:
             return Constraint.INTER_TYPE
@@ -73,11 +73,11 @@ class EqualityConstraint(Constraint):
     def get_dim(self):
         raise NotImplementedError()
     
-    def get_lower_bounds(self):
-        return np.zeros(len(self.get_dim()))
+    def get_lower_bounds(self, H):
+        return np.zeros(int(self.get_dim(H)))
 
-    def get_upper_bounds(self):
-        return np.zeros(len(self.get_dim()))
+    def get_upper_bounds(self, H):
+        return np.zeros(int(self.get_dim(H)))
 
 class InequalityConstraint(Constraint):
     def forward(self, x, u, p=None, tvp=None):
@@ -89,9 +89,9 @@ class InequalityConstraint(Constraint):
     def get_dim(self):
         raise NotImplementedError()
     
-    def get_lower_bounds(self):
-        return np.zeros(len(self.get_dim()))
+    def get_lower_bounds(self, H):
+        return np.zeros(int(self.get_dim(H)))
 
-    def get_upper_bounds(self):
-        return np.ones(len(self.get_dim()))*np.inf
+    def get_upper_bounds(self, H):
+        return np.ones(int(self.get_dim(H)))*np.inf
 
