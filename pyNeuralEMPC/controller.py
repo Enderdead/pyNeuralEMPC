@@ -46,6 +46,12 @@ class NMPC():
 
         pb_facto.set_constraints(self.constraint_list)
 
+        if not tvp is None:
+            pb_facto.set_tvp(tvp)
+
+        if not p is None:
+            pb_facto.set_p(p)   
+
         pb_obj = pb_facto.getProblemInterface()
 
         return pb_obj
@@ -61,8 +67,9 @@ class NMPC():
             assert p.shape[0] == self.integrator.model.p_dim, "p dim must set according to your model !"
 
         if not tvp is None:
-            assert len(tvp.shape) == 1, "tvp must be a vector"
-            assert tvp.shape[0] == self.integrator.model.tvp_dim, "tvp dim must set according to your model !"
+            assert len(tvp.shape) == 2, "tvp must be a vector"
+            assert tvp.shape[1] == self.integrator.model.tvp_dim, "tvp dim must set according to your model !"
+            assert tvp.shape[0] == self.H, "tvp first dim must set according to the horizon size !"
 
 
         pb_facto = self.optimizer.get_factory()
@@ -76,6 +83,12 @@ class NMPC():
         pb_facto.set_constraints(self.constraint_list)
 
         pb_obj = pb_facto.getProblemInterface()
+
+        if not tvp is None:
+            pb_facto.set_tvp(tvp)
+
+        if not p is None:
+            pb_facto.set_p(p)  
 
         res =  self.optimizer.solve(pb_obj, self.domain_constraint)
 
