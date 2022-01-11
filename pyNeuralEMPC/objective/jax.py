@@ -37,12 +37,6 @@ class JAXObjectifFunc(ObjectiveFunc):
 
         result_list = [grad_states, grad_u]
 
-        if not tvp is None:
-            result_list.append(jax.grad(self.func, argnums=3)(states, u, p, tvp)).reshape(-1)
-
-        if not p is None:
-            result_list.append(jax.grad(self.func, argnums=2)(states, u, p, tvp))
-
         return jnp.concatenate(result_list, axis=0).to_py()
 
     def hessian(self, states, u, p=None, tvp=None):
