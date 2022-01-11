@@ -116,10 +116,10 @@ class Integrator():
 
 
 
-    def get_lower_bounds(self):
+    def get_lower_bounds(self, _):
         return [0.0,]*self.nb_contraints
 
-    def get_upper_bounds(self):
+    def get_upper_bounds(self, _):
         return [0.0,]*self.nb_contraints
         
 
