@@ -106,18 +106,23 @@ class KerasTFModel(Model):
 
 
 @tf.function
-def rolling_input(input_tf, x_dim, u_dim, rolling_window=2, H=2, forward=True):
+def rolling_input(input_tf, x_dim, u_dim, rolling_window=2, H=2, forward=True, tvp_dim=0):
     # TODO do not take into account p and tvp
     x = input_tf[:,0:x_dim]
     u = input_tf[:,x_dim:x_dim+u_dim]
+    tvp = None if tvp_dim == 0 else input_tf[:,x_dim+u_dim:]
+
     if forward:
         x_rolling = tf.stack([ tf.reshape(x[i:i+rolling_window, :],(-1,)) for i in range(H)], axis=0)
         u_rolling = tf.stack([ tf.reshape(u[i:i+rolling_window, :],(-1,))  for i in range(H)], axis=0)
+        tvp_rolling = None if tvp_dim ==0 else tf.stack([ tf.reshape(tvp[i:i+rolling_window, :],(-1,))  for i in range(H)], axis=0)
+
     else:
         x_rolling = tf.stack([ tf.reshape( tf.reverse( x[i:i+rolling_window, :] , [0]),(-1,)) for i in range(H)], axis=0)
         u_rolling = tf.stack([ tf.reshape( tf.reverse( u[i:i+rolling_window, :] , [0]),(-1,))  for i in range(H)], axis=0)
+        tvp_rolling = None if tvp_dim ==0 else tf.stack([ tf.reshape( tf.reverse( tvp[i:i+rolling_window, :] , [0]),(-1,))  for i in range(H)], axis=0)
 
-    return tf.concat([x_rolling,u_rolling],axis=1)
+    return tf.concat([x_rolling,u_rolling],axis=1) if tvp_dim ==0 else tf.concat([x_rolling,u_rolling, tvp_rolling],axis=1) 
 
 class KerasTFModelRollingInput(Model):
     def __init__(self, model, x_dim: int, u_dim: int, p_dim=0, tvp_dim=0, rolling_window=2, forward_rolling=True,  standardScaler=None):
@@ -228,7 +233,7 @@ class KerasTFModelRollingInput(Model):
 
     def forward(self, x: np.ndarray, u: np.ndarray, p=None, tvp=None):
         input_net = self._gather_input(x, u, p=p, tvp=tvp)
-        input_net_rolled =  rolling_input(input_net, self.x_dim, self.u_dim, rolling_window=self.rolling_window, H=x.shape[0], forward=self.forward_rolling)
+        input_net_rolled =  rolling_input(input_net, self.x_dim, self.u_dim, rolling_window=self.rolling_window, H=x.shape[0], forward=self.forward_rolling, tvp_dim=self.tvp_dim)
         res =  self.model.predict(input_net_rolled)
         if not isinstance(res, np.ndarray):
             return res.numpy()
@@ -243,10 +248,10 @@ class KerasTFModelRollingInput(Model):
         if self.jacobian_proj is None:
             with tf.GradientTape(persistent=False) as tx:
                 tx.watch(input_tf)
-                input_tf_rolled =  rolling_input(input_tf, self.x_dim, self.u_dim, rolling_window=self.rolling_window, H=x.shape[0], forward=self.forward_rolling)
+                input_tf_rolled =  rolling_input(input_tf, self.x_dim, self.u_dim, rolling_window=self.rolling_window, H=x.shape[0], forward=self.forward_rolling, tvp_dim=self.tvp_dim)
             self.jacobian_proj = tx.jacobian(input_tf_rolled, input_tf)
         else:
-            input_tf_rolled =  rolling_input(input_tf, self.x_dim, self.u_dim, rolling_window=self.rolling_window, H=x.shape[0], forward=self.forward_rolling)  
+            input_tf_rolled =  rolling_input(input_tf, self.x_dim, self.u_dim, rolling_window=self.rolling_window, H=x.shape[0], forward=self.forward_rolling, tvp_dim=self.tvp_dim)
 
         with tf.GradientTape(persistent=False) as tx:
             tx.watch(input_tf_rolled)
@@ -254,6 +259,7 @@ class KerasTFModelRollingInput(Model):
         pre_jac_tf = tx.jacobian(output_tf, input_tf_rolled)
         
         jacobian_tf = tf.einsum("abcd,cdef->abef", pre_jac_tf, self.jacobian_proj)
+        jacobian_tf = jacobian_tf[:,:,:,:-self.tvp_dim]
 
         jacobian_np = jacobian_tf.numpy().reshape(x.shape[0]*self.x_dim, (self.x_dim+self.u_dim)*(x.shape[0]+self.rolling_window-1))
         reshape_indexer = sum([ list(np.arange(x.shape[1])+i*(x.shape[1]+u.shape[1])) for i in range(self.rolling_window-1 ,x.shape[0]+self.rolling_window-1)  ], list()) + \
@@ -270,7 +276,7 @@ class KerasTFModelRollingInput(Model):
 
         with tf.GradientTape(persistent=False) as tx:
             tx.watch(input_tf)
-            input_tf_rolled =  rolling_input(input_tf, self.x_dim, self.u_dim, rolling_window=self.rolling_window, H=x.shape[0], forward=self.forward_rolling)
+            input_tf_rolled =  rolling_input(input_tf, self.x_dim, self.u_dim, rolling_window=self.rolling_window, H=x.shape[0], forward=self.forward_rolling, tvp_dim=self.tvp_dim)
             output_tf = self.model(input_tf_rolled)
         
         jacobian_tf = tx.jacobian(output_tf, input_tf)
@@ -304,19 +310,19 @@ class KerasTFModelRollingInput(Model):
         #hessian_np = self.test(input_tf, int(self.model.output_shape[-1])).numpy()
         
         hessian_np = self._hessian_compute(input_tf).numpy()
+        total_dim = self.rolling_window*(self.x_dim + self.u_dim)
+        hessian_np = hessian_np.reshape(x.shape[0], x.shape[1], total_dim*input_np.shape[0], total_dim*input_np.shape[0])
+
         # TODO a better implem could be by spliting input BEFORE performing the hessian computation !
-        hessian_np = hessian_np.reshape(x.shape[0], x.shape[1], input_np.shape[1]*input_np.shape[0], input_np.shape[1]*input_np.shape[0])
+        hessian_np = hessian_np.reshape(x.shape[0], x.shape[1], total_dim*input_np.shape[0], total_dim*input_np.shape[0])
 
-
-
-        project_mat = np.zeros(shape=(input_np.shape[1]*x.shape[0], (self.x_dim+self.u_dim)*(x.shape[0]+self.rolling_window-1)))
+        project_mat = np.zeros(shape=(total_dim*x.shape[0], (self.x_dim+self.u_dim)*(x.shape[0]+self.rolling_window-1)))
 
         for dt in range(x.shape[0]):
             project_mat[dt*self.rolling_window*(self.x_dim+self.u_dim):dt*self.rolling_window*(self.x_dim+self.u_dim)+self.x_dim*self.rolling_window, dt*self.x_dim : dt*self.x_dim + self.x_dim*self.rolling_window] += np.eye(self.x_dim*self.rolling_window, self.x_dim*self.rolling_window)
             project_mat[self.x_dim*self.rolling_window +   dt*self.rolling_window*(self.x_dim+self.u_dim):self.x_dim*self.rolling_window + dt*self.rolling_window*(self.x_dim+self.u_dim)+self.u_dim*self.rolling_window,self.x_dim*(x.shape[0]+self.rolling_window-1)+ dt*self.u_dim :self.x_dim*(x.shape[0]+self.rolling_window-1)  + dt*self.u_dim + self.u_dim*self.rolling_window] += np.eye(self.u_dim*self.rolling_window, self.u_dim*self.rolling_window)
 
-        def dot1(A, B):
-            np.einsum("")
+
         res = np.einsum( "gc,abcf->abgf", project_mat.T, np.einsum("abcd,df->abcf",hessian_np, project_mat))
 
 
