@@ -82,13 +82,13 @@ class NMPC():
 
         pb_facto.set_constraints(self.constraint_list)
 
-        pb_obj = pb_facto.getProblemInterface()
-
         if not tvp is None:
             pb_facto.set_tvp(tvp)
 
         if not p is None:
             pb_facto.set_p(p)  
+            
+        pb_obj = pb_facto.getProblemInterface()
 
         res =  self.optimizer.solve(pb_obj, self.domain_constraint)
 
