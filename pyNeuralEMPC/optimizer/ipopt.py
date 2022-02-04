@@ -68,11 +68,15 @@ class IpoptProblem(ProblemInterface):
 
         hessian_matrice += obj_factor*self.objective_func.hessian(states, u, p=p, tvp=tvp)
 
-        integrator_hessian_matrice = self.integrator.hessian(states, u, self.x0, p=p, tvp=tvp)
+        integrator_hessian_matrix = self.integrator.hessian(states, u, self.x0, p=p, tvp=tvp)
         
-        # TODO add constraints 
-        for idx, lagrange_coef in enumerate(lagrange): # TODO remove this loop (vec comp)
-            hessian_matrice+=lagrange_coef*integrator_hessian_matrice[idx]
+        constraint_matrices = [ctr.hessian(states, u, p=p, tvp=tvp) for ctr in self.constraints_list]
+        
+        total_hessian_constraint = np.concatenate([integrator_hessian_matrix,] + constraint_matrices, axis=0)
+
+        for idx, lagrange_coef in enumerate(lagrange): 
+            hessian_matrice+=lagrange_coef*total_hessian_constraint[idx]
+
 
 
         row, col = self.hessianstructure()
@@ -93,16 +97,10 @@ class IpoptProblem(ProblemInterface):
         return self.x0
 
     def get_constraint_lower_bounds(self):
-        #TODO refaire 
-        #return self.integrator.get_lower_bounds()
-        #ajouter integrator
-        return sum( [ ctr.get_lower_bounds(self.H) for ctr in [self.integrator,]+self.constraints_list  ], list())
+        return np.concatenate( [ ctr.get_lower_bounds(self.H) for ctr in [self.integrator,]+self.constraints_list  ])
 
     def get_constraint_upper_bounds(self):
-        #TODO refaire 
-        #return self.integrator.get_upper_bounds()
-
-        return sum([ ctr.get_upper_bounds(self.H) for ctr in [self.integrator,]+self.constraints_list  ], list())
+        return np.concatenate( [ ctr.get_upper_bounds(self.H) for ctr in [self.integrator,]+self.constraints_list  ])
 
 
 class IpoptProblemFactory(ProblemFactory):
