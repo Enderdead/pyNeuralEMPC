@@ -60,7 +60,10 @@ class KerasTFModel(Model):
             output_tf = self.model(input_tf)
         
         jacobian_tf = tx.jacobian(output_tf, input_tf)
-        jacobian_np  = jacobian_tf.numpy()[:,:,:,:-self.p_dim- self.tvp_dim]
+        jacobian_np  = jacobian_tf.numpy()
+        
+        if (self.p_dim+self.tvp_dim)>0:
+            jacobian_np = jacobian_np[:,:,:,:-self.p_dim- self.tvp_dim]
 
         jacobian_np = jacobian_np.reshape(x.shape[0]*self.x_dim, (self.x_dim+self.u_dim)*x.shape[0])
         
@@ -91,7 +94,8 @@ class KerasTFModel(Model):
         #hessian_np = self.test(input_tf, int(self.model.output_shape[-1])).numpy()
         
         hessian_np = self._hessian_compute(input_tf).numpy()
-        hessian_np = hessian_np[:,:,:-self.p_dim - self.tvp_dim, :, :-self.p_dim - self.tvp_dim]
+        if (self.p_dim+self.tvp_dim)>0:
+            hessian_np = hessian_np[:,:,:-self.p_dim - self.tvp_dim, :, :-self.p_dim - self.tvp_dim]
 
         # TODO a better implem could be by spliting input BEFORE performing the hessian computation !
         hessian_np = hessian_np.reshape(x.shape[0], x.shape[1], (input_np.shape[1]-self.p_dim - self.tvp_dim)*input_np.shape[0],( input_np.shape[1]-self.p_dim - self.tvp_dim)*input_np.shape[0])
@@ -258,7 +262,8 @@ class KerasTFModelRollingInput(Model):
         pre_jac_tf = tx.jacobian(output_tf, input_tf_rolled)
         
         jacobian_tf = tf.einsum("abcd,cdef->abef", pre_jac_tf, self.jacobian_proj)
-        jacobian_tf = jacobian_tf[:,:,:,:-self.tvp_dim]
+        if (self.p_dim+self.tvp_dim)>0:
+            jacobian_tf = jacobian_tf[:,:,:,:-self.p_dim-self.tvp_dim]
         
         jacobian_np = jacobian_tf.numpy().reshape(x.shape[0]*self.x_dim, (self.x_dim+self.u_dim)*(x.shape[0]+self.rolling_window-1))
         reshape_indexer = sum([ list(np.arange(x.shape[1])+i*(x.shape[1]+u.shape[1])) for i in range(self.rolling_window-1 ,x.shape[0]+self.rolling_window-1)  ], list()) + \
