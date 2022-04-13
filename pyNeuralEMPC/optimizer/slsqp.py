@@ -9,6 +9,7 @@ import time
 
 class SlsqpProblem(ProblemInterface):
     def __init__(self, x0, objective_func, constraints, integrator, p=None, tvp=None):
+        super(SlsqpProblem, self).__init__(False)
         self.x0 = x0
         self.objective_func = objective_func 
         self.constraints_list = constraints

@@ -1,11 +1,12 @@
-from .base import Optimizer, ProblemFactory, ProblemInterface
+from .base import Optimizer, ProblemFactory, ProblemInterface, ProblemInterfaceHessianFree
 
 import numpy as np 
 import cyipopt
 import time
 
 class IpoptProblem(ProblemInterface):
-    def __init__(self, x0, objective_func, constraints, integrator, p=None, tvp=None):
+    def __init__(self, x0, objective_func, constraints, integrator, p=None, tvp=None, use_hessian=True):
+        super(IpoptProblem, self).__init__(use_hessian)
         self.x0 = x0
         self.objective_func = objective_func 
         self.constraints_list = constraints
@@ -105,7 +106,7 @@ class IpoptProblem(ProblemInterface):
 
 class IpoptProblemFactory(ProblemFactory):
     def _process(self):
-        return IpoptProblem(self.x0, self.objective, self.constraints, self.integrator, p=self.p, tvp=self.tvp)
+        return IpoptProblem(self.x0, self.objective, self.constraints, self.integrator, p=self.p, tvp=self.tvp, use_hessian=self.use_hessian)
 
 
 class Ipopt(Optimizer):
@@ -151,6 +152,10 @@ class Ipopt(Optimizer):
         cl = problem.get_constraint_lower_bounds()
         cu = problem.get_constraint_upper_bounds()
 
+        if not problem.use_hessian:
+            problem = ProblemInterfaceHessianFree(problem)
+        print(problem.use_hessian)
+        1/0
         nlp = cyipopt.Problem(
             n=len(x_init),
             m=len(cl),

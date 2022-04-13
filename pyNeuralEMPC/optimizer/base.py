@@ -3,7 +3,39 @@ from ..constraints import *
 from ..model.base import Model
 from ..objective.base import ObjectiveFunc
 
+
+class ProblemInterfaceHessianFree():
+    def __init__(self, core):
+        self.core = core
+
+
+    def objective(self, x):
+        return self.core.objective(x)
+
+    def gradient(self, x):
+        return self.core.gradient(x)
+
+    def constraints(self, x):
+        return self.core.constraints(x)
+    
+
+    def jacobian(self, x):
+        return self.core.jacobian(x)
+
+    def get_constraint_lower_bounds(self):
+        return self.core.get_constraint_lower_bounds()
+
+    def get_constraint_upper_bounds(self):
+        return self.core.get_constraint_upper_bounds()
+
+    def get_init_value(self):
+        return self.core.get_init_value()
+
 class ProblemInterface():
+    def __init__(self, use_hessian: bool):
+        self.use_hessian = use_hessian
+
+
     def objective(self, x):
         raise NotImplementedError("")
 
@@ -40,6 +72,7 @@ class ProblemFactory():
         self.tvp = None
         self.objective = None 
         self.constraints = None
+        self.use_hessian = False
         self.integrator = None
 
     def getProblemInterface(self) -> ProblemInterface:
@@ -76,6 +109,9 @@ class ProblemFactory():
 
     def set_constraints(self, ctrs: list):
         self.constraints = ctrs
+
+    def set_use_hessian(self, hessian : bool):
+        self.use_hessian = hessian
 
     def _process(self):
         raise NotImplementedError("")
