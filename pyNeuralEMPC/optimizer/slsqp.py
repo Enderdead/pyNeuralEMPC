@@ -8,7 +8,7 @@ import time
 
 
 class SlsqpProblem(ProblemInterface):
-    def __init__(self, x0, objective_func, constraints, integrator, p=None, tvp=None):
+    def __init__(self, x0, objective_func, constraints, integrator, p=None, tvp=None, init_x=None, init_u=None):
         super(SlsqpProblem, self).__init__(False)
         self.x0 = x0
         self.objective_func = objective_func 
@@ -20,6 +20,7 @@ class SlsqpProblem(ProblemInterface):
         self.tvp = tvp
         self.debug_mode = False
         self.debug_x, self.debug_u = list(), list()
+        self.init_x, self.init_u = init_x, init_u
 
     def _split(self, x):
         prev_idx = 0
@@ -112,12 +113,13 @@ class SlsqpProblem(ProblemInterface):
     def get_init_value(self):
         return self.x0
 
-
+    def get_init_variables(self):
+        return self.init_x, self.init_u
 
 
 class SlsqpProblemFactory(ProblemFactory):
     def _process(self):
-        return SlsqpProblem(self.x0, self.objective, self.constraints, self.integrator, p=self.p, tvp=self.tvp)
+        return SlsqpProblem(self.x0, self.objective, self.constraints, self.integrator, p=self.p, tvp=self.tvp, init_x=self.init_x,init_u=self.init_u )
 
 
 class Slsqp(Optimizer):
@@ -141,7 +143,16 @@ class Slsqp(Optimizer):
     def solve(self, problem, domain_constraint):
         x0 = problem.get_init_value()
         problem.set_debug(self.debug)
-        if self.init_with_last_result and not (self.prev_result is None):
+        x_init_variables, u_init_variables = problem.get_init_variables()
+        
+        if (not x_init_variables is None)  and (not u_init_variables is None):
+            assert u_init_variables.shape[0] == problem.integrator.H, f"The init u values is not compliant with the MPC horizon size (receive ={x_init_variables.shape[0]}, expected={problem.integrator.H})"
+            assert x_init_variables.shape[0] == problem.integrator.H, f"The init x values is not compliant with the MPC horizon size (receive ={x_init_variables.shape[0]}, expected={problem.integrator.H})"
+            
+            x_init = np.concatenate([x_init_variables.reshape(-1), u_init_variables.reshape(-1)], axis=0)
+
+
+        elif self.init_with_last_result and not (self.prev_result is None):
             x_dim = problem.integrator.model.x_dim
             u_dim = problem.integrator.model.u_dim
             x_init = np.concatenate([self.prev_result[x_dim:x_dim*problem.integrator.H], # x[1]-x[H]

@@ -31,9 +31,10 @@ def _check_func(func, state_dim, control_dim, p_dim, tvp_dim, rolling_window=1):
 
 class DiffDiscretJaxModel(Model):
     
-    def __init__(self, forward_func, x_dim: int, u_dim: int, p_dim=0, tvp_dim=0, vector_mode=False):
-        if not _check_func(forward_func, x_dim, u_dim, p_dim, tvp_dim):
-            raise ValueError("Your function is not differentiable w.r.t the JAX library")
+    def __init__(self, forward_func, x_dim: int, u_dim: int, p_dim=0, tvp_dim=0, vector_mode=False, safe_mode=True):
+        if safe_mode:
+            if not _check_func(forward_func, x_dim, u_dim, p_dim, tvp_dim):
+                raise ValueError("Your function is not differentiable w.r.t the JAX library")
 
         self.forward_func = forward_func
         self.vector_mode = vector_mode
@@ -91,9 +92,11 @@ class DiffDiscretJaxModel(Model):
 
 class DiffDiscretJaxModelRollingWindow(Model):
     
-    def __init__(self, forward_func, x_dim: int, u_dim: int, p_dim=0, tvp_dim=0, rolling_window=1, forward_rolling=True, vector_mode=True):
-        if not _check_func(forward_func, x_dim, u_dim, p_dim, tvp_dim, rolling_window=rolling_window):
-            raise ValueError("Your function is not differentiable w.r.t the JAX library")
+    def __init__(self, forward_func, x_dim: int, u_dim: int, p_dim=0, tvp_dim=0, rolling_window=1, forward_rolling=True, vector_mode=True, safe_mode=True):
+        
+        if safe_mode:
+            if not _check_func(forward_func, x_dim, u_dim, p_dim, tvp_dim, rolling_window=rolling_window):
+                raise ValueError("Your function is not differentiable w.r.t the JAX library")
 
         self.forward_func = forward_func
         self.vector_mode = vector_mode

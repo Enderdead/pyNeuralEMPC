@@ -63,6 +63,9 @@ class ProblemInterface():
     def get_init_value(self):
         raise NotImplementedError("")
 
+    def get_init_variables(self):
+        raise NotImplementedError("")
+
 
 class ProblemFactory():
     def __init__(self):
@@ -74,6 +77,7 @@ class ProblemFactory():
         self.constraints = None
         self.use_hessian = False
         self.integrator = None
+        self.init_u, self.init_x = None, None
 
     def getProblemInterface(self) -> ProblemInterface:
         if (not self.x0 is None) and \
@@ -97,6 +101,11 @@ class ProblemFactory():
 
     def set_x0(self, x0: np.array):
         self.x0 = x0
+
+
+    def set_init_values(self, init_x: np.array, init_u: np.array):
+        self.init_x = init_x
+        self.init_u = init_u
 
     def set_p(self, p: np.array):
         self.p = p
