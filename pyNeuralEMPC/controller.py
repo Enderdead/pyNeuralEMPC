@@ -76,10 +76,12 @@ class NMPC():
             assert len(tvp.shape) == 2, "tvp must be a vector"
             assert tvp.shape[1] == self.integrator.model.tvp_dim, "tvp dim must set according to your model !"
             assert tvp.shape[0] == self.H, "tvp first dim must set according to the horizon size !"
-
-        assert init_x.shape[1] == self.integrator.model.x_dim, f"init_x dim must have the good feature size (expected {self.integrator.model.x_dim})"
-        assert init_u.shape[1] == self.integrator.model.u_dim, f"init_u dim mist have the good feature size (expected {self.integrator.model.u_dim})"
+    
         assert (init_x is None) == (init_u is None), f"you must give both init values"
+
+        if not init_x is None:
+            assert init_x.shape[1] == self.integrator.model.x_dim, f"init_x dim must have the good feature size (expected {self.integrator.model.x_dim})"
+            assert init_u.shape[1] == self.integrator.model.u_dim, f"init_u dim mist have the good feature size (expected {self.integrator.model.u_dim})"
 
         pb_facto = self.optimizer.get_factory()
 
