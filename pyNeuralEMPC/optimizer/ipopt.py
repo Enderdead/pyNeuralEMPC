@@ -158,7 +158,6 @@ class Ipopt(Optimizer):
 
         if not problem.use_hessian:
             problem = ProblemInterfaceHessianFree(problem)
-        print(problem.use_hessian)
 
         nlp = cyipopt.Problem(
             n=len(x_init),
