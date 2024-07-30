@@ -58,7 +58,7 @@ class DiffDiscretJaxModel(Model):
             jacobians[0] = jacobians[0].reshape(self.x_dim*x.shape[0], self.x_dim*x.shape[0] )
             jacobians[1] = jacobians[1].reshape(self.x_dim*x.shape[0], self.u_dim*x.shape[0] )
 
-            jaco =  jnp.concatenate(jacobians, axis=1).to_py()
+            jaco =  np.array(jnp.concatenate(jacobians, axis=1))
             return jaco
         else:
             raise NotImplementedError("")
@@ -83,7 +83,7 @@ class DiffDiscretJaxModel(Model):
 
             final_hessian = jnp.concatenate([ab, cd], axis=2)
 
-            return final_hessian.to_py()
+            return np.array(final_hessian)
         else:
             raise NotImplementedError("")
 
